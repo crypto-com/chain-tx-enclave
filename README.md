@@ -3,7 +3,6 @@ See the [main repository's README](https://github.com/crypto-com/chain)
 
 ```
 docker build -t chain-tx .
-
 ```
 
 Simulation mode (set SGX_MODE ?= SW in Makefile):
@@ -20,7 +19,7 @@ root@docker:/# LD_LIBRARY_PATH=/opt/intel/libsgx-enclave-common/aesm /opt/intel/
 
 Build:
 ```
-cd sgx
+root@docker:/# cd sgx
 
-make
+root@docker:/# make
 ```

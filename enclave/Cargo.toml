@@ -1,0 +1,23 @@
+[package]
+name = "tx-validation-enclave"
+version = "0.1.0"
+authors = ["Crypto.com <chain@crypto.com>"]
+description = "The transaction validation enclave."
+readme = "../README.md"
+edition = "2018"
+
+[lib]
+name = "txvalidationenclave"
+crate-type = ["staticlib"]
+
+[features]
+default = []
+
+[target.'cfg(not(target_env = "sgx"))'.dependencies]
+sgx_tse       = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk" }
+sgx_tstd      = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk", features = ["net","backtrace"] }
+sgx_rand      = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk" }
+sgx_trts      = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk" }
+sgx_types     = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk" }
+sgx_tseal     = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk" }
+sgx_tcrypto   = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk" }

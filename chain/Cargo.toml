@@ -1,0 +1,14 @@
+[workspace]
+
+members = [
+    "chain-abci",
+    "chain-core",
+    "chain-tx-validation",
+    "client-cli",
+    "client-common",
+    "client-core",
+    "client-index",
+    "client-network",
+    "client-rpc",
+    "dev-utils",
+]

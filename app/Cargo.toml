@@ -12,3 +12,6 @@ dirs = "1.0.2"
 zmq = "0.9"
 sgx_types = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk" }
 sgx_urts = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk" }
+chain-core   = { git = "https://github.com/crypto-com/chain.git", rev = "3ff3ddc67bc78840b8239f9dfe90be1c0ddb129d" }
+parity-codec = { version = "4.1.1" }
+secp256k1zkp = { git = "https://github.com/crypto-com/rust-secp256k1-zkp.git", rev = "9dce794d1d8ce03ffa48823acf198fae15e896d3", features = ["recovery", "endomorphism"] }

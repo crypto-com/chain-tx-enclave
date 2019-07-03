@@ -2,6 +2,7 @@
 #![crate_type = "staticlib"]
 #![cfg_attr(not(target_env = "sgx"), no_std)]
 #![cfg_attr(target_env = "sgx", feature(rustc_private))]
+#![feature(proc_macro_hygiene)]
 
 #[cfg(not(target_env = "sgx"))]
 #[macro_use]
@@ -15,8 +16,9 @@ use chain_tx_validation::{verify_transfer, TxWithOutputs, ChainInfo};
 use parity_codec::Decode;
 use sgx_types::sgx_status_t;
 use std::slice;
-/// FIXME: proc-macro
-const NETWORK_HEX_ID: u8 = 0xab;
+use enclave_macro::get_network_id;
+
+const NETWORK_HEX_ID: u8 = get_network_id!();
 
 /// FIXME: genesis app_hash etc.
 #[no_mangle]

@@ -22,5 +22,5 @@ Build:
 ```
 cd sgx
 
-make
+SGX_MODE = [SW|HW] NETWORK_ID = <NETWORK_HEX_ID> make
 ```

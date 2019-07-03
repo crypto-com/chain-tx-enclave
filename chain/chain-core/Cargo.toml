@@ -7,14 +7,14 @@ readme = "../README.md"
 edition = "2018"
 
 [features]
-default = ["mesalock_sgx"]
+default = ["serde"]
 mesalock_sgx = ["sgx_tstd"]
 
 [dependencies]
 digest = { version = "0.8", default-features = false}
-sha3 = { version = "0.8", optional = true }
+tiny-keccak = { version = "1.5.0", default-features = false, features = ["keccak"] }
 hex = { git = "https://github.com/mesalock-linux/rust-hex-sgx.git", rev = "10618d76cc6f2aac8f356a882f1e85a1d8478998" }
-secp256k1zkp = { git = "https://github.com/crypto-com/rust-secp256k1-zkp.git", default-features = false, rev = "9dce794d1d8ce03ffa48823acf198fae15e896d3", features = ["recovery", "endomorphism", "sgx"] }
+secp256k1zkp = { git = "https://github.com/crypto-com/rust-secp256k1-zkp.git", default-features = false, rev = "ab780345c85ac2c28a4e0c08e8e18c4ecdbb1fa9", features = ["recovery", "endomorphism", "sgx"] }
 serde = { version = "1.0", features = ["derive"], optional = true }
 blake2 = { version = "0.8", default-features = false }
 parity-codec = { features = ["derive"], default-features = false, version = "4.1.1" }

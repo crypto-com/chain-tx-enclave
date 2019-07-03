@@ -21,5 +21,5 @@ Build:
 ```
 root@docker:/# cd sgx
 
-root@docker:/# make
+root@docker:/# SGX_MODE = [SW|HW] NETWORK_ID = <NETWORK_HEX_ID> make
 ```

@@ -9,6 +9,7 @@ enclave {
         public sgx_status_t ecall_initchain(uint8_t chain_hex_id);
         public sgx_status_t ecall_check_transfer_tx(
                 uint64_t min_computed_fee,
+                [out] uint64_t* actual_fee_paid,
                 long previous_block_time,
                 uint32_t unbonding_period,
                 [in, size=txaux_len] const uint8_t* txaux, size_t txaux_len,

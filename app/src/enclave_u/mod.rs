@@ -6,6 +6,7 @@ use chain_core::common::Timespec;
 use chain_core::tx::fee::Fee;
 use chain_core::tx::{data::Tx, TxAux};
 use parity_codec::Encode;
+use chain_tx_validation::TxWithOutputs;
 
 extern "C" {
     fn ecall_initchain(
@@ -36,7 +37,7 @@ pub fn initchain(eid: sgx_enclave_id_t, chain_hex_id: u8) -> bool {
 pub fn check_transfertx(
     eid: sgx_enclave_id_t,
     tx: TxAux,
-    txins: Vec<Tx>,
+    txins: Vec<TxWithOutputs>,
     min_computed_fee: Fee,
     previous_block_time: Timespec,
     unbonding_period: u32,

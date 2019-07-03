@@ -8,15 +8,15 @@
 #[macro_use]
 extern crate sgx_tstd as std;
 
- use std::prelude::v1::Vec;
 use chain_core::init::coin::Coin;
 use chain_core::tx::fee::Fee;
 use chain_core::tx::TxAux;
-use chain_tx_validation::{verify_transfer, TxWithOutputs, ChainInfo};
+use chain_tx_validation::{verify_transfer, ChainInfo, TxWithOutputs};
+use enclave_macro::get_network_id;
 use parity_codec::Decode;
 use sgx_types::sgx_status_t;
+use std::prelude::v1::Vec;
 use std::slice;
-use enclave_macro::get_network_id;
 
 const NETWORK_HEX_ID: u8 = get_network_id!();
 
@@ -33,6 +33,7 @@ pub extern "C" fn ecall_initchain(chain_hex_id: u8) -> sgx_status_t {
 #[no_mangle]
 pub extern "C" fn ecall_check_transfer_tx(
     min_computed_fee: u64,
+    actual_fee_paid: *mut u64,
     previous_block_time: i64,
     unbonding_period: u32,
     txaux: *const u8,
@@ -57,17 +58,19 @@ pub extern "C" fn ecall_check_transfer_tx(
                 min_fee_computed: fee,
                 chain_hex_id: NETWORK_HEX_ID,
                 previous_block_time,
-                unbonding_period
+                unbonding_period,
             };
             let result = verify_transfer(&tx, &witness, info, input_txs);
             if result.is_err() {
                 return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
             }
+            let actual_fee: u64 = result.unwrap().to_coin().into();
+            unsafe {
+                *actual_fee_paid = actual_fee;
+            }
             // FIXME: sealing
             sgx_status_t::SGX_SUCCESS
         }
-        _ => {
-            sgx_status_t::SGX_ERROR_INVALID_PARAMETER
-        }
-    }
+        _ => sgx_status_t::SGX_ERROR_INVALID_PARAMETER,
+    };
 }

@@ -10,9 +10,12 @@ edition = "2018"
 hex = "0.3"
 dirs = "1.0.2"
 zmq = "0.9"
+log = "0.4.0"
+env_logger = "0.6.2"
 sgx_types = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk" }
 sgx_urts = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk" }
-chain-core   = { git = "https://github.com/crypto-com/chain.git", rev = "378fa5a726510a81bfe9b49629b9d931e44bf34c" }
-chain-tx-validation   = { git = "https://github.com/crypto-com/chain.git", rev = "378fa5a726510a81bfe9b49629b9d931e44bf34c" }
+chain-core   = { git = "https://github.com/crypto-com/chain.git", rev = "7ee7d96afdb3e5fee0320a21b8b297a34c3c2453" }
+chain-tx-validation   = { git = "https://github.com/crypto-com/chain.git", rev = "7ee7d96afdb3e5fee0320a21b8b297a34c3c2453" }
+enclave-protocol   = { git = "https://github.com/crypto-com/chain.git", rev = "7ee7d96afdb3e5fee0320a21b8b297a34c3c2453" }
 parity-codec = { version = "4.1.1" }
 secp256k1zkp = { git = "https://github.com/crypto-com/rust-secp256k1-zkp.git", rev = "ab780345c85ac2c28a4e0c08e8e18c4ecdbb1fa9", features = ["recovery", "endomorphism"] }

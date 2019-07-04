@@ -3,8 +3,9 @@ pub mod init_enclave;
 use sgx_types::*;
 
 use chain_core::common::Timespec;
+use chain_core::init::coin::Coin;
 use chain_core::tx::fee::Fee;
-use chain_core::tx::{data::Tx, TxAux};
+use chain_core::tx::TxAux;
 use chain_tx_validation::TxWithOutputs;
 use parity_codec::Encode;
 
@@ -29,10 +30,14 @@ extern "C" {
     ) -> sgx_status_t;
 }
 
-pub fn initchain(eid: sgx_enclave_id_t, chain_hex_id: u8) -> bool {
+pub fn check_initchain(eid: sgx_enclave_id_t, chain_hex_id: u8) -> Result<(), ()> {
     let mut retval: sgx_status_t = sgx_status_t::SGX_SUCCESS;
     let result = unsafe { ecall_initchain(eid, &mut retval, chain_hex_id) };
-    retval == sgx_status_t::SGX_SUCCESS && result == retval
+    if retval == sgx_status_t::SGX_SUCCESS && result == retval {
+        Ok(())
+    } else {
+        Err(())
+    }
 }
 
 pub fn check_transfertx(
@@ -42,7 +47,7 @@ pub fn check_transfertx(
     min_computed_fee: Fee,
     previous_block_time: Timespec,
     unbonding_period: u32,
-) -> bool {
+) -> Result<Fee, ()> {
     let tx_enc: Vec<u8> = tx.encode();
     let txins_enc: Vec<u8> = txins.encode();
     let mut retval: sgx_status_t = sgx_status_t::SGX_SUCCESS;
@@ -61,6 +66,12 @@ pub fn check_transfertx(
             txins_enc.len(),
         )
     };
-    println!("fee: {}", actual_fee_paid);
-    retval == sgx_status_t::SGX_SUCCESS && result == retval
+    if retval == sgx_status_t::SGX_SUCCESS && result == retval {
+        let fee = Fee::new(
+            Coin::new(actual_fee_paid).expect("fee should not be larger than coin supply"),
+        );
+        Ok(fee)
+    } else {
+        Err(())
+    }
 }

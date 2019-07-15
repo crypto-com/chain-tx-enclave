@@ -1,14 +1,12 @@
-use either::Either;
 use failure::ResultExt;
 use parity_codec::{Decode, Encode};
 use secstr::SecUtf8;
 
 use chain_core::common::H256;
 use chain_core::init::address::RedeemAddress;
+use chain_core::state::account::StakedStateAddress;
 use chain_core::tx::data::address::ExtendedAddr;
-use client_common::{Error, ErrorKind, Result, SecureStorage, Storage};
-
-use crate::PublicKey;
+use client_common::{Error, ErrorKind, PublicKey, Result, SecureStorage, Storage};
 
 const KEYSPACE: &str = "core_wallet";
 
@@ -74,33 +72,20 @@ where
         &self,
         name: &str,
         passphrase: &SecUtf8,
-        root_hash: &H256,
+        address: &ExtendedAddr,
     ) -> Result<Option<H256>> {
         let root_hashes = self.root_hashes(name, passphrase)?;
 
-        for known_hash in root_hashes {
-            if known_hash == *root_hash {
-                return Ok(Some(known_hash));
-            }
-        }
-
-        Ok(None)
-    }
-
-    /// Finds an address in wallet and returns corresponding public key or root hash
-    pub fn find(
-        &self,
-        name: &str,
-        passphrase: &SecUtf8,
-        address: &ExtendedAddr,
-    ) -> Result<Option<Either<PublicKey, H256>>> {
         match address {
-            ExtendedAddr::BasicRedeem(ref address) => self
-                .find_public_key(name, passphrase, address)
-                .map(|public_key_optional| public_key_optional.map(Either::Left)),
-            ExtendedAddr::OrTree(ref root_hash) => self
-                .find_root_hash(name, passphrase, root_hash)
-                .map(|known_hash_optional| known_hash_optional.map(Either::Right)),
+            ExtendedAddr::OrTree(ref root_hash) => {
+                for known_hash in root_hashes {
+                    if known_hash == *root_hash {
+                        return Ok(Some(known_hash));
+                    }
+                }
+
+                Ok(None)
+            }
         }
     }
 
@@ -125,36 +110,25 @@ where
         Ok(wallet.root_hashes)
     }
 
-    /// Returns all addresses stored in a wallet
-    pub fn addresses(&self, name: &str, passphrase: &SecUtf8) -> Result<Vec<ExtendedAddr>> {
-        let mut addresses = Vec::new();
-
-        addresses.extend(
-            self.public_keys(name, passphrase)?
-                .iter()
-                .map(|public_key| ExtendedAddr::BasicRedeem(RedeemAddress::from(public_key))),
-        );
-
-        addresses.extend(
-            self.root_hashes(name, passphrase)?
-                .into_iter()
-                .map(ExtendedAddr::OrTree),
-        );
-
-        Ok(addresses)
-    }
-
-    /// Returns all redeem addresses stored in a wallet
-    pub fn redeem_addresses(&self, name: &str, passphrase: &SecUtf8) -> Result<Vec<ExtendedAddr>> {
+    /// Returns all staking addresses stored in a wallet
+    pub fn staking_addresses(
+        &self,
+        name: &str,
+        passphrase: &SecUtf8,
+    ) -> Result<Vec<StakedStateAddress>> {
         Ok(self
             .public_keys(name, passphrase)?
             .iter()
-            .map(|public_key| ExtendedAddr::BasicRedeem(RedeemAddress::from(public_key)))
+            .map(|public_key| StakedStateAddress::BasicRedeem(RedeemAddress::from(public_key)))
             .collect())
     }
 
     /// Returns all tree addresses stored in a wallet
-    pub fn tree_addresses(&self, name: &str, passphrase: &SecUtf8) -> Result<Vec<ExtendedAddr>> {
+    pub fn transfer_addresses(
+        &self,
+        name: &str,
+        passphrase: &SecUtf8,
+    ) -> Result<Vec<ExtendedAddr>> {
         Ok(self
             .root_hashes(name, passphrase)?
             .into_iter()
@@ -217,8 +191,7 @@ mod tests {
     use super::*;
 
     use client_common::storage::MemoryStorage;
-
-    use crate::PrivateKey;
+    use client_common::PrivateKey;
 
     #[test]
     fn check_flow() {

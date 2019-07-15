@@ -34,7 +34,7 @@ impl TxValidationServer {
                         ))
                     }
                     Some(EnclaveRequest::VerifyTx {
-                        tx: TxAux::TransferTx(tx, witness),
+                        tx: TxAux::TransferTx { txpayload, .. },
                         inputs,
                         min_fee_computed,
                         previous_block_time,
@@ -43,7 +43,7 @@ impl TxValidationServer {
                         debug!("verify transfer tx");
                         EnclaveResponse::VerifyTx(check_transfertx(
                             self.enclave.geteid(),
-                            TxAux::TransferTx(tx, witness),
+                            txpayload,
                             inputs,
                             min_fee_computed,
                             previous_block_time,

@@ -1,49 +1,94 @@
+use failure::ResultExt;
+use hex::{decode, encode};
+use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
-use jsonrpc_http_server::jsonrpc_core;
 use secstr::SecUtf8;
-use serde::Deserialize;
-use std::str::FromStr;
+use serde::{Deserialize, Serialize};
 
-use chain_core::init::address::RedeemAddress;
+use chain_core::common::{H256, HASH_SIZE_256};
 use chain_core::init::coin::Coin;
 use chain_core::tx::data::address::ExtendedAddr;
 use chain_core::tx::data::attribute::TxAttributes;
 use chain_core::tx::data::output::TxOut;
 use client_common::balance::TransactionChange;
-use client_core::wallet::WalletClient;
+use client_common::{Error, ErrorKind, PublicKey, Result as CommonResult};
+use client_core::{MultiSigWalletClient, WalletClient};
 
 use crate::server::{rpc_error_from_string, to_rpc_error};
 
 #[rpc]
 pub trait WalletRpc {
     #[rpc(name = "wallet_addresses")]
-    fn addresses(&self, request: WalletRequest) -> jsonrpc_core::Result<Vec<String>>;
+    fn addresses(&self, request: WalletRequest) -> Result<Vec<String>>;
 
     #[rpc(name = "wallet_balance")]
-    fn balance(&self, request: WalletRequest) -> jsonrpc_core::Result<Coin>;
+    fn balance(&self, request: WalletRequest) -> Result<Coin>;
 
     #[rpc(name = "wallet_create")]
-    fn create(&self, request: WalletRequest) -> jsonrpc_core::Result<String>;
+    fn create(&self, request: WalletRequest) -> Result<String>;
 
     #[rpc(name = "wallet_list")]
-    fn list(&self) -> jsonrpc_core::Result<Vec<String>>;
+    fn list(&self) -> Result<Vec<String>>;
 
     #[rpc(name = "wallet_sendtoaddress")]
-    fn sendtoaddress(
-        &self,
-        request: WalletRequest,
-        to_address: String,
-        amount: u64,
-    ) -> jsonrpc_core::Result<()>;
+    fn sendtoaddress(&self, request: WalletRequest, to_address: String, amount: u64) -> Result<()>;
 
     #[rpc(name = "sync")]
-    fn sync(&self) -> jsonrpc_core::Result<()>;
+    fn sync(&self) -> Result<()>;
 
     #[rpc(name = "sync_all")]
-    fn sync_all(&self) -> jsonrpc_core::Result<()>;
+    fn sync_all(&self) -> Result<()>;
 
     #[rpc(name = "wallet_transactions")]
-    fn transactions(&self, request: WalletRequest) -> jsonrpc_core::Result<Vec<TransactionChange>>;
+    fn transactions(&self, request: WalletRequest) -> Result<Vec<TransactionChange>>;
+
+    #[rpc(name = "multi_sig_new_session")]
+    fn new_multi_sig_session(
+        &self,
+        request: WalletRequest,
+        message: String,
+        signer_public_keys: Vec<String>,
+        self_public_key: String,
+    ) -> Result<String>;
+
+    #[rpc(name = "multi_sig_nonce_commitment")]
+    fn nonce_commitment(&self, session_id: String, passphrase: SecUtf8) -> Result<String>;
+
+    #[rpc(name = "multi_sig_add_nonce_commitment")]
+    fn add_nonce_commitment(
+        &self,
+        session_id: String,
+        passphrase: SecUtf8,
+        nonce_commitment: String,
+        public_key: String,
+    ) -> Result<()>;
+
+    #[rpc(name = "multi_sig_nonce")]
+    fn nonce(&self, session_id: String, passphrase: SecUtf8) -> Result<String>;
+
+    #[rpc(name = "multi_sig_add_nonce")]
+    fn add_nonce(
+        &self,
+        session_id: String,
+        passphrase: SecUtf8,
+        nonce: String,
+        public_key: String,
+    ) -> Result<()>;
+
+    #[rpc(name = "multi_sig_partial_signature")]
+    fn partial_signature(&self, session_id: String, passphrase: SecUtf8) -> Result<String>;
+
+    #[rpc(name = "multi_sig_add_partial_signature")]
+    fn add_partial_signature(
+        &self,
+        session_id: String,
+        passphrase: SecUtf8,
+        partial_signature: String,
+        public_key: String,
+    ) -> Result<()>;
+
+    #[rpc(name = "multi_sig_signature")]
+    fn signature(&self, session_id: String, passphrase: SecUtf8) -> Result<String>;
 }
 
 pub struct WalletRpcImpl<T: WalletClient + Send + Sync> {
@@ -62,24 +107,23 @@ where
 
 impl<T> WalletRpc for WalletRpcImpl<T>
 where
-    T: WalletClient + Send + Sync + 'static,
+    T: WalletClient + MultiSigWalletClient + Send + Sync + 'static,
 {
-    fn addresses(&self, request: WalletRequest) -> jsonrpc_core::Result<Vec<String>> {
-        match self.client.addresses(&request.name, &request.passphrase) {
+    fn addresses(&self, request: WalletRequest) -> Result<Vec<String>> {
+        // TODO: Currently, it only returns staking addresses
+        match self
+            .client
+            .staking_addresses(&request.name, &request.passphrase)
+        {
             Ok(addresses) => addresses
                 .iter()
-                .map(|address| match address {
-                    ExtendedAddr::BasicRedeem(address) => Ok(format!("{}", address)),
-                    _ => Err(rpc_error_from_string(
-                        "Unsupported address format".to_owned(),
-                    )),
-                })
+                .map(|address| Ok(address.to_string()))
                 .collect(),
             Err(e) => Err(to_rpc_error(e)),
         }
     }
 
-    fn balance(&self, request: WalletRequest) -> jsonrpc_core::Result<Coin> {
+    fn balance(&self, request: WalletRequest) -> Result<Coin> {
         self.sync()?;
 
         match self.client.balance(&request.name, &request.passphrase) {
@@ -88,14 +132,14 @@ where
         }
     }
 
-    fn create(&self, request: WalletRequest) -> jsonrpc_core::Result<String> {
+    fn create(&self, request: WalletRequest) -> Result<String> {
         if let Err(e) = self.client.new_wallet(&request.name, &request.passphrase) {
             return Err(to_rpc_error(e));
         }
 
         if let Err(e) = self
             .client
-            .new_redeem_address(&request.name, &request.passphrase)
+            .new_single_transfer_address(&request.name, &request.passphrase)
         {
             Err(to_rpc_error(e))
         } else {
@@ -103,31 +147,26 @@ where
         }
     }
 
-    fn list(&self) -> jsonrpc_core::Result<Vec<String>> {
+    fn list(&self) -> Result<Vec<String>> {
         match self.client.wallets() {
             Ok(wallets) => Ok(wallets),
             Err(e) => Err(to_rpc_error(e)),
         }
     }
 
-    fn sendtoaddress(
-        &self,
-        request: WalletRequest,
-        to_address: String,
-        amount: u64,
-    ) -> jsonrpc_core::Result<()> {
+    fn sendtoaddress(&self, request: WalletRequest, to_address: String, amount: u64) -> Result<()> {
         self.sync()?;
 
-        let redeem_address = RedeemAddress::from_str(&to_address[..])
+        let address = to_address
+            .parse::<ExtendedAddr>()
             .map_err(|err| rpc_error_from_string(format!("{}", err)))?;
-        let address = ExtendedAddr::BasicRedeem(redeem_address);
         let coin = Coin::new(amount).map_err(|err| rpc_error_from_string(format!("{}", err)))?;
         let tx_out = TxOut::new(address, coin);
         let tx_attributes = TxAttributes::new(self.chain_id);
 
         let return_address = self
             .client
-            .new_redeem_address(&request.name, &request.passphrase)
+            .new_single_transfer_address(&request.name, &request.passphrase)
             .map_err(to_rpc_error)?;
 
         let transaction = self
@@ -147,7 +186,7 @@ where
             .map_err(to_rpc_error)
     }
 
-    fn sync(&self) -> jsonrpc_core::Result<()> {
+    fn sync(&self) -> Result<()> {
         if let Err(e) = self.client.sync() {
             Err(to_rpc_error(e))
         } else {
@@ -155,7 +194,7 @@ where
         }
     }
 
-    fn sync_all(&self) -> jsonrpc_core::Result<()> {
+    fn sync_all(&self) -> Result<()> {
         if let Err(e) = self.client.sync_all() {
             Err(to_rpc_error(e))
         } else {
@@ -163,7 +202,7 @@ where
         }
     }
 
-    fn transactions(&self, request: WalletRequest) -> jsonrpc_core::Result<Vec<TransactionChange>> {
+    fn transactions(&self, request: WalletRequest) -> Result<Vec<TransactionChange>> {
         self.sync()?;
 
         match self.client.history(&request.name, &request.passphrase) {
@@ -171,9 +210,146 @@ where
             Err(e) => Err(to_rpc_error(e)),
         }
     }
+
+    fn new_multi_sig_session(
+        &self,
+        request: WalletRequest,
+        message: String,
+        signer_public_keys: Vec<String>,
+        self_public_key: String,
+    ) -> Result<String> {
+        let message = parse_hash_256(message).map_err(to_rpc_error)?;
+        let signer_public_keys = signer_public_keys
+            .into_iter()
+            .map(parse_public_key)
+            .collect::<CommonResult<Vec<PublicKey>>>()
+            .map_err(to_rpc_error)?;
+        let self_public_key = parse_public_key(self_public_key).map_err(to_rpc_error)?;
+
+        self.client
+            .new_multi_sig_session(
+                &request.name,
+                &request.passphrase,
+                message,
+                signer_public_keys,
+                self_public_key,
+            )
+            .map(serialize_hash_256)
+            .map_err(to_rpc_error)
+    }
+
+    fn nonce_commitment(&self, session_id: String, passphrase: SecUtf8) -> Result<String> {
+        let session_id = parse_hash_256(session_id).map_err(to_rpc_error)?;
+
+        self.client
+            .nonce_commitment(&session_id, &passphrase)
+            .map(serialize_hash_256)
+            .map_err(to_rpc_error)
+    }
+
+    fn add_nonce_commitment(
+        &self,
+        session_id: String,
+        passphrase: SecUtf8,
+        nonce_commitment: String,
+        public_key: String,
+    ) -> Result<()> {
+        let session_id = parse_hash_256(session_id).map_err(to_rpc_error)?;
+        let nonce_commitment = parse_hash_256(nonce_commitment).map_err(to_rpc_error)?;
+        let public_key = parse_public_key(public_key).map_err(to_rpc_error)?;
+
+        self.client
+            .add_nonce_commitment(&session_id, &passphrase, nonce_commitment, &public_key)
+            .map_err(to_rpc_error)
+    }
+
+    fn nonce(&self, session_id: String, passphrase: SecUtf8) -> Result<String> {
+        let session_id = parse_hash_256(session_id).map_err(to_rpc_error)?;
+
+        self.client
+            .nonce(&session_id, &passphrase)
+            .map(serialize_public_key)
+            .map_err(to_rpc_error)
+    }
+
+    fn add_nonce(
+        &self,
+        session_id: String,
+        passphrase: SecUtf8,
+        nonce: String,
+        public_key: String,
+    ) -> Result<()> {
+        let session_id = parse_hash_256(session_id).map_err(to_rpc_error)?;
+        let nonce = parse_public_key(nonce).map_err(to_rpc_error)?;
+        let public_key = parse_public_key(public_key).map_err(to_rpc_error)?;
+
+        self.client
+            .add_nonce(&session_id, &passphrase, &nonce, &public_key)
+            .map_err(to_rpc_error)
+    }
+
+    fn partial_signature(&self, session_id: String, passphrase: SecUtf8) -> Result<String> {
+        let session_id = parse_hash_256(session_id).map_err(to_rpc_error)?;
+
+        self.client
+            .partial_signature(&session_id, &passphrase)
+            .map(serialize_hash_256)
+            .map_err(to_rpc_error)
+    }
+
+    fn add_partial_signature(
+        &self,
+        session_id: String,
+        passphrase: SecUtf8,
+        partial_signature: String,
+        public_key: String,
+    ) -> Result<()> {
+        let session_id = parse_hash_256(session_id).map_err(to_rpc_error)?;
+        let partial_signature = parse_hash_256(partial_signature).map_err(to_rpc_error)?;
+        let public_key = parse_public_key(public_key).map_err(to_rpc_error)?;
+
+        self.client
+            .add_partial_signature(&session_id, &passphrase, partial_signature, &public_key)
+            .map_err(to_rpc_error)
+    }
+
+    fn signature(&self, session_id: String, passphrase: SecUtf8) -> Result<String> {
+        let session_id = parse_hash_256(session_id).map_err(to_rpc_error)?;
+
+        self.client
+            .signature(&session_id, &passphrase)
+            .map(|sig| sig.to_string())
+            .map_err(to_rpc_error)
+    }
 }
 
-#[derive(Debug, Deserialize)]
+fn serialize_hash_256(hash: H256) -> String {
+    encode(&hash)
+}
+
+fn parse_hash_256(hash: String) -> CommonResult<H256> {
+    let array = decode(hash).context(ErrorKind::DeserializationError)?;
+
+    if array.len() != HASH_SIZE_256 {
+        return Err(Error::from(ErrorKind::DeserializationError));
+    }
+
+    let mut new_hash: H256 = [0; HASH_SIZE_256];
+    new_hash.copy_from_slice(&array);
+
+    Ok(new_hash)
+}
+
+fn serialize_public_key(public_key: PublicKey) -> String {
+    encode(&public_key.serialize())
+}
+
+fn parse_public_key(public_key: String) -> CommonResult<PublicKey> {
+    let array = decode(public_key).context(ErrorKind::DeserializationError)?;
+    PublicKey::deserialize_from(&array)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WalletRequest {
     name: String,
     passphrase: SecUtf8,
@@ -184,21 +360,16 @@ mod tests {
     use super::*;
 
     use chrono::DateTime;
-    use std::str::FromStr;
     use std::time::SystemTime;
 
-    use chain_core::init::address::RedeemAddress;
-    use chain_core::init::coin::{Coin, CoinError};
-    use chain_core::tx::data::address::ExtendedAddr;
-    use chain_core::tx::data::attribute::TxAttributes;
+    use chain_core::init::coin::CoinError;
     use chain_core::tx::data::input::TxoPointer;
-    use chain_core::tx::data::output::TxOut;
     use chain_core::tx::data::{Tx, TxId};
     use chain_core::tx::fee::{Fee, FeeAlgorithm};
     use chain_core::tx::TxAux;
-    use client_common::balance::{BalanceChange, TransactionChange};
+    use client_common::balance::BalanceChange;
     use client_common::storage::MemoryStorage;
-    use client_common::{Error, ErrorKind, Result, Transaction};
+    use client_common::Transaction;
     use client_core::signer::DefaultSigner;
     use client_core::transaction_builder::DefaultTransactionBuilder;
     use client_core::wallet::DefaultWalletClient;
@@ -208,15 +379,18 @@ mod tests {
     pub struct MockIndex;
 
     impl Index for MockIndex {
-        fn sync(&self) -> Result<()> {
+        fn sync(&self) -> CommonResult<()> {
             Ok(())
         }
 
-        fn sync_all(&self) -> Result<()> {
+        fn sync_all(&self) -> CommonResult<()> {
             Ok(())
         }
 
-        fn transaction_changes(&self, address: &ExtendedAddr) -> Result<Vec<TransactionChange>> {
+        fn transaction_changes(
+            &self,
+            address: &ExtendedAddr,
+        ) -> CommonResult<Vec<TransactionChange>> {
             Ok(vec![TransactionChange {
                 transaction_id: [0u8; 32],
                 address: address.clone(),
@@ -226,18 +400,18 @@ mod tests {
             }])
         }
 
-        fn balance(&self, _: &ExtendedAddr) -> Result<Coin> {
+        fn balance(&self, _: &ExtendedAddr) -> CommonResult<Coin> {
             Ok(Coin::new(30).unwrap())
         }
 
         fn unspent_transactions(
             &self,
             _address: &ExtendedAddr,
-        ) -> Result<Vec<(TxoPointer, TxOut)>> {
+        ) -> CommonResult<Vec<(TxoPointer, TxOut)>> {
             Ok(Vec::new())
         }
 
-        fn transaction(&self, _: &TxId) -> Result<Option<Transaction>> {
+        fn transaction(&self, _: &TxId) -> CommonResult<Option<Transaction>> {
             Ok(Some(Transaction::TransferTransaction(Tx {
                 inputs: vec![TxoPointer {
                     id: [0u8; 32],
@@ -248,17 +422,15 @@ mod tests {
             })))
         }
 
-        fn output(&self, _id: &TxId, _index: usize) -> Result<TxOut> {
+        fn output(&self, _id: &TxId, _index: usize) -> CommonResult<TxOut> {
             Ok(TxOut {
-                address: ExtendedAddr::BasicRedeem(
-                    RedeemAddress::from_str("0x1fdf22497167a793ca794963ad6c95e6ffa0b971").unwrap(),
-                ),
+                address: ExtendedAddr::OrTree([0; 32]),
                 value: Coin::new(10000000000000000000).unwrap(),
                 valid_from: None,
             })
         }
 
-        fn broadcast_transaction(&self, _transaction: &[u8]) -> Result<()> {
+        fn broadcast_transaction(&self, _transaction: &[u8]) -> CommonResult<()> {
             Ok(())
         }
     }

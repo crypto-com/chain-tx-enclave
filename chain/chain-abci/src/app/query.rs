@@ -1,15 +1,33 @@
 use super::ChainNodeApp;
+use crate::enclave_bridge::EnclaveProxy;
 use crate::storage::tx::get_account;
 use crate::storage::*;
 use abci::*;
 use chain_core::common::{MerkleTree, Proof as MerkleProof, H256, HASH_SIZE_256};
 use chain_core::state::account::StakedStateAddress;
+use chain_core::tx::data::input::TxoIndex;
 use chain_core::tx::data::{txid_hash, TXID_HASH_ID};
+use chain_core::tx::TransactionId;
+use chain_core::tx::{PlainTxAux, TxAux};
+use chain_tx_validation::TxWithOutputs;
+use enclave_protocol::{
+    DecryptionRequest, DecryptionRequestBody, DecryptionResponse, EncryptionRequest,
+    EncryptionResponse,
+};
 use integer_encoding::VarInt;
 use parity_codec::{Decode, Encode};
 use std::convert::TryFrom;
 
-impl ChainNodeApp {
+/// Generate generic ABCI ProofOp for the witness
+fn get_witness_proof_op(witness: &[u8]) -> ProofOp {
+    let mut op = ProofOp::new();
+    op.set_field_type("witness".into());
+    op.set_key(TXID_HASH_ID.to_vec());
+    op.set_data(txid_hash(witness).to_vec());
+    op
+}
+
+impl<T: EnclaveProxy> ChainNodeApp<T> {
     /// Helper to find a key under a column in KV DB, or log an error (both stored in the response).
     fn lookup(&self, resp: &mut ResponseQuery, column: Option<u32>, key: &[u8], log_message: &str) {
         let v = self.storage.db.get(column, key);
@@ -22,15 +40,6 @@ impl ChainNodeApp {
                 resp.code = 1;
             }
         }
-    }
-
-    /// Generate generic ABCI ProofOp for the witness
-    fn get_witness_proof_op(witness: &[u8]) -> ProofOp {
-        let mut op = ProofOp::new();
-        op.set_field_type("witness".into());
-        op.set_key(TXID_HASH_ID.to_vec());
-        op.set_data(txid_hash(witness).to_vec());
-        op
     }
 
     /// Responds to query requests -- note that path is hex-encoded in the original request on the client side
@@ -49,6 +58,53 @@ impl ChainNodeApp {
 
         // TODO: auth / verification (when TXs are encrypted)
         match _req.path.as_ref() {
+            // FIXME: temporary mock
+            "mockencrypt" => {
+                let request = EncryptionRequest::decode(&mut _req.data.as_slice());
+                if let Some(EncryptionRequest {
+                    tx: PlainTxAux::TransferTx(tx, witness),
+                }) = request
+                {
+                    let mock = EncryptionResponse {
+                        tx: TxAux::TransferTx {
+                            txid: tx.id(),
+                            inputs: tx.inputs.clone(),
+                            no_of_outputs: tx.outputs.len() as TxoIndex,
+                            nonce: [0u8; 12],
+                            txpayload: PlainTxAux::TransferTx(tx, witness).encode(),
+                        },
+                    };
+                    resp.value = mock.encode();
+                } else {
+                    resp.log += "invalid request";
+                    resp.code = 1;
+                }
+            }
+            // FIXME: temporary mock
+            "mockdecrypt" => {
+                let request = DecryptionRequest::decode(&mut _req.data.as_slice());
+                if let Some(DecryptionRequest {
+                    body: DecryptionRequestBody { txs },
+                    ..
+                }) = request
+                {
+                    let mut resp_txs = Vec::with_capacity(txs.len());
+                    let looked_up = txs.iter().map(|txid| self.storage.db.get(COL_BODIES, txid));
+                    for found in looked_up {
+                        if let Ok(Some(uv)) = found {
+                            let tx = TxWithOutputs::decode(&mut uv.to_vec().as_slice());
+                            if let Some(TxWithOutputs::Transfer(ttx)) = tx {
+                                resp_txs.push(ttx);
+                            }
+                        }
+                    }
+                    let mock = DecryptionResponse { txs: resp_txs };
+                    resp.value = mock.encode();
+                } else {
+                    resp.log += "invalid request";
+                    resp.code = 1;
+                }
+            }
             "store" => {
                 self.lookup(&mut resp, COL_BODIES, &_req.data[..], "tx not found");
                 if _req.prove && resp.code == 0 {
@@ -83,10 +139,10 @@ impl ChainNodeApp {
 
                             // TODO: Change this in future to include individual ops?
                             let proof_ops = match tree.generate_proof(txid) {
-                                None => vec![ChainNodeApp::get_witness_proof_op(&witness[..])],
+                                None => vec![get_witness_proof_op(&witness[..])],
                                 Some(merkle_proof) => vec![
                                     into_proof_op(tree.root_hash(), merkle_proof),
-                                    ChainNodeApp::get_witness_proof_op(&witness[..]),
+                                    get_witness_proof_op(&witness[..]),
                                 ],
                             };
 

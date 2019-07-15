@@ -10,7 +10,7 @@ extern crate sgx_tstd as std;
 
 use chain_core::init::coin::Coin;
 use chain_core::tx::fee::Fee;
-use chain_core::tx::TxAux;
+use chain_core::tx::PlainTxAux;
 use chain_tx_validation::{verify_transfer, ChainInfo, TxWithOutputs};
 use enclave_macro::get_network_id;
 use parity_codec::Decode;
@@ -49,11 +49,11 @@ pub extern "C" fn ecall_check_transfer_tx(
     let mut txaux_slice = unsafe { slice::from_raw_parts(txaux, txaux_len) };
     let mut inputs_slice = unsafe { slice::from_raw_parts(txsin, txsin_len) };
     // FIXME: decrypting
-    let txaux = TxAux::decode(&mut txaux_slice);
+    let txaux = PlainTxAux::decode(&mut txaux_slice);
     let inputs: Option<Vec<TxWithOutputs>> = Decode::decode(&mut inputs_slice);
 
     return match (txaux, inputs) {
-        (Some(TxAux::TransferTx(tx, witness)), Some(input_txs)) => {
+        (Some(PlainTxAux::TransferTx(tx, witness)), Some(input_txs)) => {
             let info = ChainInfo {
                 min_fee_computed: fee,
                 chain_hex_id: NETWORK_HEX_ID,

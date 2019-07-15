@@ -42,13 +42,12 @@ pub fn check_initchain(eid: sgx_enclave_id_t, chain_hex_id: u8) -> Result<(), ()
 
 pub fn check_transfertx(
     eid: sgx_enclave_id_t,
-    tx: TxAux,
+    tx_enc: Vec<u8>,
     txins: Vec<TxWithOutputs>,
     min_computed_fee: Fee,
     previous_block_time: Timespec,
     unbonding_period: u32,
 ) -> Result<Fee, ()> {
-    let tx_enc: Vec<u8> = tx.encode();
     let txins_enc: Vec<u8> = txins.encode();
     let mut retval: sgx_status_t = sgx_status_t::SGX_SUCCESS;
     let mut actual_fee_paid = 0;

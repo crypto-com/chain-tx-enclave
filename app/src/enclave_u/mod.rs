@@ -4,6 +4,7 @@ use sgx_types::*;
 
 use chain_core::common::Timespec;
 use chain_core::init::coin::Coin;
+use chain_core::state::account::StakedState;
 use chain_core::tx::fee::Fee;
 use chain_core::tx::TxAux;
 use chain_tx_validation::TxWithOutputs;
@@ -47,7 +48,7 @@ pub fn check_transfertx(
     min_computed_fee: Fee,
     previous_block_time: Timespec,
     unbonding_period: u32,
-) -> Result<Fee, ()> {
+) -> Result<(Fee, Option<StakedState>), ()> {
     let txins_enc: Vec<u8> = txins.encode();
     let mut retval: sgx_status_t = sgx_status_t::SGX_SUCCESS;
     let mut actual_fee_paid = 0;
@@ -69,7 +70,7 @@ pub fn check_transfertx(
         let fee = Fee::new(
             Coin::new(actual_fee_paid).expect("fee should not be larger than coin supply"),
         );
-        Ok(fee)
+        Ok((fee, None))
     } else {
         Err(())
     }

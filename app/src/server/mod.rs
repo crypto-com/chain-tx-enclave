@@ -1,5 +1,5 @@
 use crate::enclave_u::{check_initchain, check_transfertx};
-use chain_core::tx::TxAux;
+use chain_core::tx::{TxAux, TxObfuscated};
 use enclave_protocol::{EnclaveRequest, EnclaveResponse, FLAGS};
 use log::{debug, info};
 use parity_codec::{Decode, Encode};
@@ -34,20 +34,23 @@ impl TxValidationServer {
                         ))
                     }
                     Some(EnclaveRequest::VerifyTx {
-                        tx: TxAux::TransferTx { txpayload, .. },
+                        tx:
+                            TxAux::TransferTx {
+                                payload: TxObfuscated { txpayload, .. },
+                                ..
+                            },
                         inputs,
-                        min_fee_computed,
-                        previous_block_time,
-                        unbonding_period,
+                        info,
+                        ..
                     }) => {
                         debug!("verify transfer tx");
                         EnclaveResponse::VerifyTx(check_transfertx(
                             self.enclave.geteid(),
                             txpayload,
                             inputs,
-                            min_fee_computed,
-                            previous_block_time,
-                            unbonding_period,
+                            info.min_fee_computed,
+                            info.previous_block_time,
+                            info.unbonding_period,
                         ))
                     }
                     Some(_) => {

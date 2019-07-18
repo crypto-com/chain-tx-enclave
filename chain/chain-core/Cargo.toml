@@ -7,8 +7,9 @@ readme = "../README.md"
 edition = "2018"
 
 [features]
-default = ["serde"]
+default = ["serde", "bech32"]
 mesalock_sgx = ["sgx_tstd"]
+
 
 [dependencies]
 digest = { version = "0.8", default-features = false}
@@ -21,6 +22,7 @@ parity-codec = { features = ["derive"], default-features = false, version = "4.1
 base64 = { git = "https://github.com/mesalock-linux/rust-base64-sgx.git", rev = "3bc16457fa44ed6f4cbc3c40804c38bde7d89e03" }
 sgx_tstd = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk.git", optional = true }
 static_assertions = { version = "0.3.3", default-features = false}
+bech32 = { version = "0.7.1", optional = true }
 
 [dev-dependencies]
 serde_json = "1.0"

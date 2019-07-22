@@ -7,13 +7,24 @@ enclave {
 
     trusted {
         public sgx_status_t ecall_initchain(uint8_t chain_hex_id);
+
         public sgx_status_t ecall_check_transfer_tx(
-                uint64_t min_computed_fee,
                 [out] uint64_t* actual_fee_paid,
-                long previous_block_time,
-                uint32_t unbonding_period,
+                [in, size=chain_info_len] const uint8_t* chain_info, size_t chain_info_len,
                 [in, size=txaux_len] const uint8_t* txaux, size_t txaux_len,
                 [in, size=txsin_len] const uint8_t* txsin, size_t txsin_len);
+
+        public sgx_status_t ecall_check_deposit_tx(
+                [out] uint64_t* input_coin_sum,
+                [in, size=chain_info_len] const uint8_t* chain_info, size_t chain_info_len,
+                [in, size=txaux_len] const uint8_t* txaux, size_t txaux_len,
+                [in, size=txsin_len] const uint8_t* txsin, size_t txsin_len);
+
+        public sgx_status_t ecall_check_withdraw_tx(
+                [out] uint64_t* actual_fee_paid,
+                [in, size=chain_info_len] const uint8_t* chain_info, size_t chain_info_len,
+                [in, size=txaux_len] const uint8_t* txaux, size_t txaux_len,
+                [in, size=account_len] const uint8_t* account, size_t account_len);
     };
     untrusted {
 

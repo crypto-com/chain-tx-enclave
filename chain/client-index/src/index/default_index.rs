@@ -11,7 +11,7 @@ use chain_core::tx::TransactionId;
 use chain_core::tx::TxAux;
 use client_common::balance::{BalanceChange, TransactionChange};
 use client_common::tendermint::Client;
-use client_common::{Error, ErrorKind, Result, Storage, Transaction};
+use client_common::{Result, Storage, Transaction};
 
 use crate::service::*;
 use crate::Index;
@@ -23,11 +23,9 @@ where
     S: Storage,
     C: Client,
 {
-    balance_service: BalanceService<S>,
+    address_service: AddressService<S>,
     global_state_service: GlobalStateService<S>,
-    transaction_change_service: TransactionChangeService<S>,
     transaction_service: TransactionService<S>,
-    unspent_transaction_service: UnspentTransactionService<S>,
     client: C,
 }
 
@@ -39,11 +37,9 @@ where
     /// Creates a new instance of `DefaultIndex`
     pub fn new(storage: S, client: C) -> Self {
         Self {
-            balance_service: BalanceService::new(storage.clone()),
+            address_service: AddressService::new(storage.clone()),
             global_state_service: GlobalStateService::new(storage.clone()),
-            transaction_change_service: TransactionChangeService::new(storage.clone()),
-            transaction_service: TransactionService::new(storage.clone()),
-            unspent_transaction_service: UnspentTransactionService::new(storage),
+            transaction_service: TransactionService::new(storage),
             client,
         }
     }
@@ -56,9 +52,8 @@ where
 {
     /// Clears all the services
     fn clear(&self) -> Result<()> {
-        self.balance_service.clear()?;
+        self.address_service.clear()?;
         self.global_state_service.clear()?;
-        self.transaction_change_service.clear()?;
         self.transaction_service.clear()
     }
 
@@ -73,14 +68,12 @@ where
                 unimplemented!("FIXME: indexing should be rethought, as it'll first check the filter and query (block data would be obfuscated)")
             }
             TxAux::DepositStakeTx{ tx, .. } => {
-                self.handle_deposit_stake_transaction(&tx, height, time)?;
+                self.handle_deposit_stake_transaction(tx.clone(), height, time)?;
                 self.transaction_service.set(
-                    &tx.id(),
                     &Transaction::DepositStakeTransaction(tx),
                 )
             }
             TxAux::UnbondStakeTx(unbond_transaction, _) => self.transaction_service.set(
-                &unbond_transaction.id(),
                 &Transaction::UnbondStakeTransaction(unbond_transaction),
             ),
             TxAux::WithdrawUnbondedStakeTx{ .. } => {
@@ -91,78 +84,75 @@ where
 
     fn handle_deposit_stake_transaction(
         &self,
-        transaction: &DepositBondTx,
+        transaction: DepositBondTx,
         height: u64,
         time: DateTime<Utc>,
     ) -> Result<()> {
         let transaction_id = transaction.id();
+        let mut memento = AddressMemento::new(transaction_id);
 
-        for input in transaction.inputs.iter() {
-            self.handle_transaction_input(transaction_id, input, height, time)?;
+        for input in transaction.inputs.into_iter() {
+            self.handle_transaction_input(&mut memento, transaction_id, input, height, time)?;
         }
 
-        Ok(())
+        self.address_service.apply_memento(&memento)
     }
 
     fn handle_transaction_input(
         &self,
+        memento: &mut AddressMemento,
         transaction_id: TxId,
-        input: &TxoPointer,
-        height: u64,
-        time: DateTime<Utc>,
+        input: TxoPointer,
+        block_height: u64,
+        block_time: DateTime<Utc>,
     ) -> Result<()> {
-        let output = self.output(&input.id, input.index as usize)?;
+        let output = self.transaction_service.get_output(&input)?;
 
         let change = TransactionChange {
             transaction_id,
             address: output.address,
             balance_change: BalanceChange::Outgoing(output.value),
-            height,
-            time,
+            block_height,
+            block_time,
         };
 
-        // Update balance
-        self.balance_service
-            .change(&change.address, &change.balance_change)?;
+        let address = change.address.clone();
+
+        // Update transaction history and balance
+        memento.add_transaction_change(&address, change);
 
         // Update unspent transactions
-        self.unspent_transaction_service
-            .remove(&change.address, input)?;
+        memento.remove_unspent_transaction(&address, input);
 
-        // Update transaction history
-        self.transaction_change_service.add(&change)
+        Ok(())
     }
 
     /// this will still be probably used even in redesigned client indexing
     #[allow(dead_code)]
     fn handle_transaction_output(
         &self,
+        memento: &mut AddressMemento,
         transaction_id: TxId,
-        output: &TxOut,
+        output: TxOut,
         index: usize,
-        height: u64,
-        time: DateTime<Utc>,
-    ) -> Result<()> {
+        block_height: u64,
+        block_time: DateTime<Utc>,
+    ) {
         let change = TransactionChange {
             transaction_id,
             address: output.address.clone(),
             balance_change: BalanceChange::Incoming(output.value),
-            height,
-            time,
+            block_height,
+            block_time,
         };
 
-        // Update balance
-        self.balance_service
-            .change(&change.address, &change.balance_change)?;
+        let address = change.address.clone();
+
+        // Update transaction history and balance
+        memento.add_transaction_change(&address, change);
 
         // Update unspent transactions
-        self.unspent_transaction_service.add(
-            &change.address,
-            (&TxoPointer::new(transaction_id, index), output),
-        )?;
-
-        // Update transaction history
-        self.transaction_change_service.add(&change)
+        memento.add_unspent_transaction(&address, TxoPointer::new(transaction_id, index), output);
     }
 }
 
@@ -180,7 +170,7 @@ where
         let current_block_height = self.client.status()?.last_block_height()?;
 
         for height in (last_block_height + 1)..=current_block_height {
-            let valid_transaction_ids = self.client.block_results(height)?.ids()?;
+            let valid_transaction_ids = self.client.block_results(height)?.transaction_ids()?;
             let block = self.client.block(height)?;
             let transactions = block.transactions()?;
 
@@ -205,18 +195,23 @@ where
     }
 
     #[inline]
+    fn address_details(&self, address: &ExtendedAddr) -> Result<AddressDetails> {
+        self.address_service.get(address)
+    }
+
+    #[inline]
     fn transaction_changes(&self, address: &ExtendedAddr) -> Result<Vec<TransactionChange>> {
-        self.transaction_change_service.get(address)
+        Ok(self.address_service.get(address)?.transaction_history)
     }
 
     #[inline]
     fn balance(&self, address: &ExtendedAddr) -> Result<Coin> {
-        self.balance_service.get(address)
+        Ok(self.address_service.get(address)?.balance)
     }
 
     #[inline]
     fn unspent_transactions(&self, address: &ExtendedAddr) -> Result<Vec<(TxoPointer, TxOut)>> {
-        self.unspent_transaction_service.get(address)
+        Ok(self.address_service.get(address)?.unspent_transactions)
     }
 
     #[inline]
@@ -224,32 +219,9 @@ where
         self.transaction_service.get(id)
     }
 
-    fn output(&self, id: &TxId, index: usize) -> Result<TxOut> {
-        let transaction = self
-            .transaction(id)?
-            .ok_or_else(|| Error::from(ErrorKind::TransactionNotFound))?;
-
-        match transaction {
-            Transaction::TransferTransaction(transfer_transaction) => {
-                let output = transfer_transaction
-                    .outputs
-                    .into_iter()
-                    .nth(index)
-                    .ok_or_else(|| Error::from(ErrorKind::TransactionNotFound))?;
-
-                Ok(output)
-            }
-            Transaction::WithdrawUnbondedStakeTransaction(withdraw_transaction) => {
-                let output = withdraw_transaction
-                    .outputs
-                    .into_iter()
-                    .nth(index)
-                    .ok_or_else(|| Error::from(ErrorKind::TransactionNotFound))?;
-
-                Ok(output)
-            }
-            _ => Err(ErrorKind::InvalidTransaction.into()),
-        }
+    #[inline]
+    fn output(&self, input: &TxoPointer) -> Result<TxOut> {
+        self.transaction_service.get_output(input)
     }
 
     #[inline]
@@ -279,6 +251,7 @@ mod tests {
     use chain_core::tx::TxObfuscated;
     use client_common::storage::MemoryStorage;
     use client_common::tendermint::types::*;
+    use client_common::ErrorKind;
 
     /// Mock tendermint client
     #[derive(Clone)]
@@ -420,6 +393,7 @@ mod tests {
                                 }],
                             }],
                         }]),
+                        end_block: None,
                     },
                 })
             } else if height == 2 {
@@ -437,6 +411,7 @@ mod tests {
                                 }],
                             }],
                         }]),
+                        end_block: None,
                     },
                 })
             } else {
@@ -449,7 +424,7 @@ mod tests {
         }
 
         /// Get abci query
-        fn query(&self, _path: &str, _data: &str) -> Result<QueryResult> {
+        fn query(&self, _path: &str, _data: &[u8]) -> Result<QueryResult> {
             Ok(QueryResult {
                 response: Response {
                     value: "".to_string(),
@@ -511,7 +486,9 @@ mod tests {
             .iter()
         {
             assert!(index.transaction(&change.transaction_id).unwrap().is_some());
-            assert!(index.output(&change.transaction_id, 0).is_ok());
+            assert!(index
+                .output(&TxoPointer::new(change.transaction_id, 0))
+                .is_ok());
         }
     }
 }

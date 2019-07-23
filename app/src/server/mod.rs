@@ -1,5 +1,5 @@
-use crate::enclave_u::{check_initchain, check_transfertx};
-use chain_core::tx::{TxAux, TxObfuscated};
+use crate::enclave_u::{check_deposit_tx, check_initchain, check_transfertx, check_withdraw_tx};
+use chain_core::tx::TxAux;
 use enclave_protocol::{EnclaveRequest, EnclaveResponse, FLAGS};
 use log::{debug, info};
 use parity_codec::{Decode, Encode};
@@ -34,11 +34,7 @@ impl TxValidationServer {
                         ))
                     }
                     Some(EnclaveRequest::VerifyTx {
-                        tx:
-                            TxAux::TransferTx {
-                                payload: TxObfuscated { txpayload, .. },
-                                ..
-                            },
+                        tx: tx @ TxAux::TransferTx { .. },
                         inputs,
                         info,
                         ..
@@ -46,11 +42,38 @@ impl TxValidationServer {
                         debug!("verify transfer tx");
                         EnclaveResponse::VerifyTx(check_transfertx(
                             self.enclave.geteid(),
-                            txpayload,
+                            tx,
                             inputs,
-                            info.min_fee_computed,
-                            info.previous_block_time,
-                            info.unbonding_period,
+                            info,
+                        ))
+                    }
+                    Some(EnclaveRequest::VerifyTx {
+                        tx: tx @ TxAux::DepositStakeTx { .. },
+                        inputs,
+                        info,
+                        account,
+                    }) => {
+                        debug!("verify deposit tx");
+                        EnclaveResponse::VerifyTx(check_deposit_tx(
+                            self.enclave.geteid(),
+                            tx,
+                            inputs,
+                            account,
+                            info,
+                        ))
+                    }
+                    Some(EnclaveRequest::VerifyTx {
+                        tx: tx @ TxAux::WithdrawUnbondedStakeTx { .. },
+                        info,
+                        account: Some(account),
+                        ..
+                    }) => {
+                        debug!("verify deposit tx");
+                        EnclaveResponse::VerifyTx(check_withdraw_tx(
+                            self.enclave.geteid(),
+                            tx,
+                            account,
+                            info,
                         ))
                     }
                     Some(_) => {

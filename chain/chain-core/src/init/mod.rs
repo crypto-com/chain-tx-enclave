@@ -8,6 +8,7 @@ pub mod coin;
 /// Configuration in JSON passed to InitChain
 pub mod config;
 
+#[cfg(feature = "bech32")]
 pub mod network;
 
 /// maximum total supply with a fixed decimal point
@@ -18,5 +19,3 @@ pub const MAX_COIN: u64 = 100_000_000_000__0000_0000;
 pub const MAX_COIN_DECIMALS: u64 = 1_0000_0000;
 /// 100 billion
 pub const MAX_COIN_UNITS: i64 = 100_000_000_000;
-
-pub const CURRENT_NETWORK: network::Network = network::Network::Mainnet;

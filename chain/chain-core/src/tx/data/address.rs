@@ -11,13 +11,16 @@ use crate::init::address::{CroAddress, CroAddressError};
 #[cfg(feature = "bech32")]
 use bech32::{self, u5, FromBase32, ToBase32};
 
+#[cfg(feature = "bech32")]
+use crate::init::network::get_bech32_human_part;
+
 /// TODO: opaque types?
 type TreeRoot = H256;
 
 /// Currently, only Ethereum-style redeem address + MAST of Or operations (records the root).
 /// TODO: HD-addresses?
 /// TODO: custom Encode/Decode when data structures are finalized (for backwards/forwards compatibility, encoders/decoders should be able to work with old formats)
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ExtendedAddr {
     OrTree(TreeRoot),
@@ -27,14 +30,9 @@ pub enum ExtendedAddr {
 impl ExtendedAddr {
     fn get_string(&self, hash: TreeRoot) -> String {
         let checked_data: Vec<u5> = hash.to_vec().to_base32();
-        match crate::init::CURRENT_NETWORK {
-            crate::init::network::Network::Testnet => {
-                bech32::encode("crtt", checked_data).expect("bech32 crmt encoding")
-            }
-            crate::init::network::Network::Mainnet => {
-                bech32::encode("crmt", checked_data).expect("bech32 crmt encoding")
-            }
-        }
+
+        bech32::encode(get_bech32_human_part(), checked_data)
+            .expect("bech32 should be successful in ExtendedAddr get_string")
     }
 }
 

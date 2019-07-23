@@ -27,34 +27,36 @@
 # THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# Modifications Copyright 2019 Foris Limited (licensed under the Apache License, Version 2.0)
 
-FROM ubuntu:18.04
-MAINTAINER Yu Ding
+FROM ubuntu:16.04
+LABEL maintainer="Yu Ding"
+LABEL maintainer="Calvin Lau <calvin@crypto.com"
 
-ENV sdk_bin https://download.01.org/intel-sgx/linux-2.5/ubuntu18.04-server/sgx_linux_x64_sdk_2.5.100.49891.bin
-ENV psw_deb https://download.01.org/intel-sgx/linux-2.5/ubuntu18.04-server/libsgx-enclave-common_2.5.101.50123-bionic1_amd64.deb
-ENV psw_dev_deb https://download.01.org/intel-sgx/linux-2.5/ubuntu18.04-server/libsgx-enclave-common-dev_2.5.101.50123-bionic1_amd64.deb
-ENV psw_dbgsym_deb https://download.01.org/intel-sgx/linux-2.5/ubuntu18.04-server/libsgx-enclave-common-dbgsym_2.5.101.50123-bionic1_amd64.ddeb
+# SW|HW
+ARG SGX_MODE
+# Network Hex ID
+ARG NETWORK_ID
+
+ENV sdk_bin https://download.01.org/intel-sgx/linux-2.5/ubuntu16.04-server/sgx_linux_x64_sdk_2.5.100.49891.bin
+ENV psw_deb https://download.01.org/intel-sgx/linux-2.5/ubuntu16.04-server/libsgx-enclave-common_2.5.101.50123-xenial1_amd64.deb
+ENV psw_dev_deb https://download.01.org/intel-sgx/linux-2.5/ubuntu16.04-server/libsgx-enclave-common-dev_2.5.101.50123-xenial1_amd64.deb
 ENV rust_toolchain nightly-2019-05-22
-ENV DEBIAN_FRONTEND=noninteractive
+
+ENV SGX_MODE=${SGX_MODE}
+ENV NETWORK_ID=${NETWORK_ID}
 
 RUN apt-get update && \
-    apt-get install -y build-essential ocaml ocamlbuild automake autoconf libtool wget python libssl-dev libcurl4-openssl-dev protobuf-compiler libprotobuf-dev sudo kmod vim curl git-core libprotobuf-c0-dev libboost-thread-dev libboost-system-dev liblog4cpp5-dev libjsoncpp-dev alien uuid-dev libxml2-dev cmake pkg-config expect systemd-sysv gdb && \
+    apt-get install -y build-essential ocaml automake autoconf libtool wget python libssl-dev libcurl4-openssl-dev protobuf-compiler libprotobuf-dev sudo kmod vim curl git-core libprotobuf-c0-dev libboost-thread-dev libboost-system-dev liblog4cpp5-dev libjsoncpp-dev alien uuid-dev libxml2-dev cmake pkg-config expect gdb && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /var/cache/apt/archives/*
 
 RUN mkdir /root/sgx && \
-    mkdir /etc/init && \
     wget -O /root/sgx/psw.deb ${psw_deb} && \
     wget -O /root/sgx/psw_dev.deb ${psw_dev_deb} && \
-    wget -O /root/sgx/psw_dbgsym.deb ${psw_dbgsym_deb} && \
     wget -O /root/sgx/sdk.bin ${sdk_bin} && \
     cd /root/sgx && \
     dpkg -i /root/sgx/psw.deb && \
     dpkg -i /root/sgx/psw_dev.deb && \
-    dpkg -i /root/sgx/psw_dbgsym.deb && \
     chmod +x /root/sgx/sdk.bin && \
     echo -e 'no\n/opt' | /root/sgx/sdk.bin && \
     echo 'source /opt/sgxsdk/environment' >> /root/.bashrc && \
@@ -71,5 +73,13 @@ WORKDIR /root
 
 # install zmq
 RUN apt-get update && \
-	    apt-get install -y --no-install-recommends libzmq3-dev \
-	    && rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends libzmq3-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Build Transaction Enclave
+COPY . .
+RUN ["/bin/bash", "-c", "make"]
+
+# ENTRYPOINT ["./tx-validation-app", "tcp://0.0.0.0:25933"]
+
+

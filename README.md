@@ -9,7 +9,9 @@ For more details, see the [Crypto.com Chain README](https://github.com/crypto-co
 
 ## Build the Docker image
 ```bash
-docker build -t chain-tx . --build-args SGX_MODE=<SW|HW> NETWORK_ID=<NETWORK_HEX_ID>
+$ docker build -t chain-tx . \
+--build-arg SGX_MODE=<SW|HW> \
+--build-arg NETWORK_ID=<NETWORK_HEX_ID>
 ```
 
 - `SGX_MODE`:
@@ -22,12 +24,18 @@ docker build -t chain-tx . --build-args SGX_MODE=<SW|HW> NETWORK_ID=<NETWORK_HEX
 
 - Software Simulation Mode
 ```bash
-# docker run -p <HOST_PORT>:<DOCKER_APP_PORT> -rm chain-tx
-$ docker run -rm -p 25933:25933 chain-tx
+# docker run --rm -p <HOST_PORT>:<DOCKER_APP_PORT> -rm chain-tx
+$ docker run --rm \
+-p 25933:25933 \
+chain-tx
 ```
 
 - Hardware Mode
 ```bash
-# docker run --device /dev/isgx -p <HOST_PORT>:<DOCKER_APP_PORT> chain-tx --env LD_LIBRARY_PATH=/opt/intel/libsgx-enclave-common/aesm /opt/intel/libsgx-enclave-common/aesm/aesm_service
-docker run -rm --device /dev/isgx -p 25933:25933 chain-tx --env LD_LIBRARY_PATH=/opt/intel/libsgx-enclave-common/aesm /opt/intel/libsgx-enclave-common/aesm/aesm_service
+# docker run --rm --device /dev/isgx -p <HOST_PORT>:<DOCKER_APP_PORT> chain-tx --env LD_LIBRARY_PATH="/opt/intel/libsgx-enclave-common/aesm /opt/intel/libsgx-enclave-common/aesm/aesm_service"
+$ docker run --rm \
+--device /dev/isgx \
+-p 25933:25933 \
+chain-tx \
+--env LD_LIBRARY_PATH="/opt/intel/libsgx-enclave-common/aesm /opt/intel/libsgx-enclave-common/aesm/aesm_service"
 ```

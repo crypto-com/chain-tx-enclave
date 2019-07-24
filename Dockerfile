@@ -1,7 +1,7 @@
 FROM baiduxlab/sgx-rust:1604-1.0.8
 LABEL maintainer="Crypto.com"
 
-ARG SGX_MODE
+ARG SGX_MODE=SW
 ARG NETWORK_ID
 
 ENV SGX_MODE=${SGX_MODE}
@@ -23,4 +23,4 @@ RUN ["/bin/bash", "-c", "source /root/.docker_bashrc && make"]
 
 WORKDIR /root/bin
 
-ENTRYPOINT ["/bin/bash", "-c", "source /root/.docker_bashrc && ./tx-validation-app tcp://0.0.0.0:${APP_PORT}"]
+CMD ["/bin/bash", "-c", "source /root/.docker_bashrc && ./tx-validation-app tcp://0.0.0.0:${APP_PORT}"]

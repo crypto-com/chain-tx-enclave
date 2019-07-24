@@ -39,3 +39,12 @@ $ docker run --rm \
 chain-tx \
 --env LD_LIBRARY_PATH="/opt/intel/libsgx-enclave-common/aesm /opt/intel/libsgx-enclave-common/aesm/aesm_service"
 ```
+
+## Run /bin/bash inside Docker instance
+
+If you want to get your hands dirty, you can
+```bash
+$ docker run --rm \
+chain-tx \
+/bin/bash
+```

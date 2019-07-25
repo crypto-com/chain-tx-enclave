@@ -68,7 +68,7 @@ impl TxValidationServer {
                         account: Some(account),
                         ..
                     }) => {
-                        debug!("verify deposit tx");
+                        debug!("verify withdraw tx");
                         EnclaveResponse::VerifyTx(check_withdraw_tx(
                             self.enclave.geteid(),
                             tx,

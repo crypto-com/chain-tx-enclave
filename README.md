@@ -32,11 +32,10 @@ chain-tx
 
 - Hardware Mode
 ```bash
-# docker run --rm --device /dev/isgx -p <HOST_PORT>:<DOCKER_APP_PORT> --env LD_LIBRARY_PATH="/opt/intel/libsgx-enclave-common/aesm /opt/intel/libsgx-enclave-common/aesm/aesm_service" chain-tx
+# docker run --rm --device /dev/isgx -p <HOST_PORT>:<DOCKER_APP_PORT> chain-tx
 $ docker run --rm \
 --device /dev/isgx \
 -p 25933:25933 \
---env LD_LIBRARY_PATH="/opt/intel/libsgx-enclave-common/aesm /opt/intel/libsgx-enclave-common/aesm/aesm_service" \
 chain-tx
 ```
 

@@ -1,25 +1,49 @@
-# (WIP) Crypto.com Chain Transaction Enclaves
-See the [main repository's README](https://github.com/crypto-com/chain)
+<p align="center">
+  <img src="https://avatars0.githubusercontent.com/u/41934032?s=400&v=4" alt="Crypto.com Chain" width="400">
+</p>
 
-```
-docker build -t chain-tx .
-```
+<h2 align="center">(Work in Progress) <a href="https://crypto.com">Crypto.com<a> Chain Transaction Enclaves</h2
 
-Simulation mode (set SGX_MODE ?= SW in Makefile):
-```
-docker run -ti --rm  -v ~/chain-tx-enclave/:/root/sgx -it chain-tx /bin/bash
-```
+For more details, see the [Crypto.com Chain README](https://github.com/crypto-com/chain)
 
-Hardware mode (set SGX_MODE ?= HW in Makefile):
-```
-docker run -ti --device /dev/isgx -v ~/chain-tx-enclave/:/root/sgx -it chain-tx /bin/bash
 
-root@docker:/# LD_LIBRARY_PATH=/opt/intel/libsgx-enclave-common/aesm /opt/intel/libsgx-enclave-common/aesm/aesm_service &
+## Build the Docker image
+```bash
+$ docker build -t chain-tx . \
+--build-arg SGX_MODE=<SW|HW> \
+--build-arg NETWORK_ID=<NETWORK_HEX_ID>
 ```
 
-Build:
-```
-root@docker:/# cd sgx
+- `SGX_MODE`:
+  - `SW` for Software Simulation mode
+  - `HW` for Hardware mode
+- `NETWORK_HEX_ID`: Network HEX Id of Tendermint
+- `APP_PORT`: Listening Port inside the Docker instance (Default: 25933)
 
-root@docker:/# SGX_MODE = [SW|HW] NETWORK_ID = <NETWORK_HEX_ID> make
+## Run the Docker instance
+
+- Software Simulation Mode
+```bash
+# docker run --rm -p <HOST_PORT>:<DOCKER_APP_PORT> -rm chain-tx
+$ docker run --rm \
+-p 25933:25933 \
+chain-tx
+```
+
+- Hardware Mode
+```bash
+# docker run --rm --device /dev/isgx -p <HOST_PORT>:<DOCKER_APP_PORT> chain-tx
+$ docker run --rm \
+--device /dev/isgx \
+-p 25933:25933 \
+chain-tx
+```
+
+## Run /bin/bash inside Docker instance
+
+If you want to get your hands dirty, you can
+```bash
+$ docker run --rm \
+chain-tx \
+/bin/bash
 ```

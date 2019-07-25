@@ -1,5 +1,3 @@
-# Modifications Copyright 2019 Foris Limited (licensed under the Apache License, Version 2.0)
-
 FROM baiduxlab/sgx-rust:1804-1.0.8
 LABEL maintainer="Crypto.com"
 

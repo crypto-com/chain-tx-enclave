@@ -17,7 +17,7 @@ fn storage_path() -> String {
 }
 
 const META_KEYSPACE: &[u8] = b"meta";
-// const TX_KEYSPACE: &[u8] = b"tx";
+const TX_KEYSPACE: &[u8] = b"tx";
 
 fn main() {
     env_logger::init();
@@ -30,6 +30,9 @@ fn main() {
     let metadb = db
         .open_tree(META_KEYSPACE)
         .expect("failed to open a meta keyspace");
+    let txdb = db
+        .open_tree(TX_KEYSPACE)
+        .expect("failed to open a tx keyspace");
 
     let enclave = match init_enclave(metadb) {
         Ok(r) => {
@@ -44,7 +47,7 @@ fn main() {
 
     let child_t = thread::spawn(move || {
         let mut server =
-            TxValidationServer::new(&args[1], enclave).expect("could not start a zmq server");
+            TxValidationServer::new(&args[1], enclave, txdb).expect("could not start a zmq server");
         info!("starting zmq server");
         server.execute()
     });

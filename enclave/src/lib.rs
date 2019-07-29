@@ -17,8 +17,9 @@ use chain_tx_validation::{
     TxWithOutputs,
 };
 use enclave_macro::get_network_id;
-use parity_codec::Decode;
-use sgx_types::sgx_status_t;
+use parity_codec::{Decode, Encode};
+use sgx_tseal::SgxSealedData;
+use sgx_types::{sgx_sealed_data_t, sgx_status_t};
 use std::prelude::v1::Vec;
 use std::slice;
 
@@ -48,6 +49,8 @@ fn check_chain_info(chain_info: *const u8, chain_info_len: usize) -> Option<Chai
 #[no_mangle]
 pub extern "C" fn ecall_check_transfer_tx(
     actual_fee_paid: *mut u64,
+    sealed_log: *mut u8,
+    sealed_log_size: u32,
     chain_info: *const u8,
     chain_info_len: usize,
     txaux: *const u8,
@@ -84,11 +87,25 @@ pub extern "C" fn ecall_check_transfer_tx(
                 if result.is_err() {
                     return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
                 }
+                let to_seal = TxWithOutputs::Transfer(tx).encode();
+                let sealing_result = SgxSealedData::<[u8]>::seal_data(&txid, &to_seal);
+                let sealed_data = match sealing_result {
+                    Ok(x) => x,
+                    Err(ret) => {
+                        return ret;
+                    }
+                };
                 let actual_fee: u64 = result.unwrap().to_coin().into();
                 unsafe {
+                    let sealed_r = sealed_data.to_raw_sealed_data_t(
+                        sealed_log as *mut sgx_sealed_data_t,
+                        sealed_log_size,
+                    );
+                    if sealed_r.is_none() {
+                        return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
+                    }
                     *actual_fee_paid = actual_fee;
                 }
-                // FIXME: sealing
                 sgx_status_t::SGX_SUCCESS
             }
             _ => {
@@ -154,6 +171,8 @@ pub extern "C" fn ecall_check_deposit_tx(
 #[no_mangle]
 pub extern "C" fn ecall_check_withdraw_tx(
     actual_fee_paid: *mut u64,
+    sealed_log: *mut u8,
+    sealed_log_size: u32,
     chain_info: *const u8,
     chain_info_len: usize,
     txaux: *const u8,
@@ -198,8 +217,23 @@ pub extern "C" fn ecall_check_withdraw_tx(
                 if result.is_err() {
                     return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
                 }
+                let to_seal = TxWithOutputs::StakeWithdraw(tx).encode();
+                let sealing_result = SgxSealedData::<[u8]>::seal_data(&txid, &to_seal);
+                let sealed_data = match sealing_result {
+                    Ok(x) => x,
+                    Err(ret) => {
+                        return ret;
+                    }
+                };
                 let actual_fee: u64 = result.unwrap().to_coin().into();
                 unsafe {
+                    let sealed_r = sealed_data.to_raw_sealed_data_t(
+                        sealed_log as *mut sgx_sealed_data_t,
+                        sealed_log_size,
+                    );
+                    if sealed_r.is_none() {
+                        return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
+                    }
                     *actual_fee_paid = actual_fee;
                 }
                 // FIXME: sealing

@@ -7,6 +7,7 @@ readme = "../README.md"
 edition = "2018"
 
 [dependencies]
+sled = "0.24.1"
 hex = "0.3"
 dirs = "1.0.2"
 zmq = "0.9"

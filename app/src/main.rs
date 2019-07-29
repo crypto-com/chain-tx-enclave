@@ -4,8 +4,20 @@ mod server;
 use crate::enclave_u::init_enclave::init_enclave;
 use crate::server::TxValidationServer;
 use log::{error, info};
+use sled::Db;
 use std::env;
 use std::thread;
+
+/// TODO: connection string as env variable?
+fn storage_path() -> String {
+    match std::env::var("TX_ENCLAVE_STORAGE") {
+        Ok(path) => path,
+        Err(_) => ".enclave".to_owned(),
+    }
+}
+
+const META_KEYSPACE: &[u8] = b"meta";
+// const TX_KEYSPACE: &[u8] = b"tx";
 
 fn main() {
     env_logger::init();
@@ -14,7 +26,12 @@ fn main() {
         error!("Please provide the ZMQ connection string (e.g. \"tcp://127.0.0.1:25933\") as the first argument");
         return;
     }
-    let enclave = match init_enclave() {
+    let db = Db::start_default(storage_path()).expect("failed to open a storage path");
+    let metadb = db
+        .open_tree(META_KEYSPACE)
+        .expect("failed to open a meta keyspace");
+
+    let enclave = match init_enclave(metadb) {
         Ok(r) => {
             info!("[+] Init Enclave Successful {}!", r.geteid());
             r

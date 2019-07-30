@@ -1,5 +1,7 @@
 mod enclave_u;
 mod server;
+#[cfg(feature = "test")]
+mod test;
 
 use crate::enclave_u::init_enclave::init_enclave;
 use crate::server::TxValidationServer;
@@ -19,6 +21,12 @@ fn storage_path() -> String {
 const META_KEYSPACE: &[u8] = b"meta";
 const TX_KEYSPACE: &[u8] = b"tx";
 
+#[cfg(feature = "test")]
+fn main() {
+    test::test_sealing();
+}
+
+#[cfg(not(feature = "test"))]
 fn main() {
     env_logger::init();
     let args: Vec<String> = env::args().collect();

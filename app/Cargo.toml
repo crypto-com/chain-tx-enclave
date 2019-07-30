@@ -6,6 +6,9 @@ description = "Application server wrapper around the transaction validation encl
 readme = "../README.md"
 edition = "2018"
 
+[features]
+test = []
+
 [dependencies]
 sled = "0.24.1"
 hex = "0.3"

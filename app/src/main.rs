@@ -1,6 +1,6 @@
 mod enclave_u;
 mod server;
-#[cfg(feature = "test")]
+#[cfg(feature = "sgx-test")]
 mod test;
 
 use crate::enclave_u::init_enclave::init_enclave;
@@ -21,12 +21,12 @@ fn storage_path() -> String {
 const META_KEYSPACE: &[u8] = b"meta";
 const TX_KEYSPACE: &[u8] = b"tx";
 
-#[cfg(feature = "test")]
+#[cfg(feature = "sgx-test")]
 fn main() {
     test::test_sealing();
 }
 
-#[cfg(not(feature = "test"))]
+#[cfg(not(feature = "sgx-test"))]
 fn main() {
     env_logger::init();
     let args: Vec<String> = env::args().collect();

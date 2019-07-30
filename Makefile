@@ -88,7 +88,7 @@ Enclave_EDL_Files := enclave/Enclave_t.c enclave/Enclave_t.h app/Enclave_u.c app
 ######## APP Settings ########
 
 ifeq ($(SGX_TEST), 1)
-	App_Rust_Flags := $(CARGO_TARGET) --features "test"
+	App_Rust_Flags := $(CARGO_TARGET) --features "sgx-test"
 else
 	App_Rust_Flags := $(CARGO_TARGET)
 endif

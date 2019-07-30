@@ -7,7 +7,7 @@ readme = "../README.md"
 edition = "2018"
 
 [features]
-test = []
+sgx-test = []
 
 [dependencies]
 sled = "0.24.1"

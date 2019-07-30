@@ -10,6 +10,9 @@ use chain_core::tx::TxAux;
 use chain_core::ChainInfo;
 use chain_tx_validation::TxWithOutputs;
 use parity_codec::Encode;
+use sled::Tree;
+use std::mem::size_of;
+use std::sync::Arc;
 
 extern "C" {
     fn ecall_initchain(
@@ -22,6 +25,8 @@ extern "C" {
         eid: sgx_enclave_id_t,
         retval: *mut sgx_status_t,
         actual_fee_paid: *mut u64,
+        sealed_log: *mut u8,
+        sealed_log_size: u32,
         chain_info: *const u8,
         chain_info_len: usize,
         txaux: *const u8,
@@ -46,6 +51,8 @@ extern "C" {
         eid: sgx_enclave_id_t,
         retval: *mut sgx_status_t,
         actual_fee_paid: *mut u64,
+        sealed_log: *mut u8,
+        sealed_log_size: u32,
         chain_info: *const u8,
         chain_info_len: usize,
         txaux: *const u8,
@@ -71,10 +78,13 @@ pub fn check_transfertx(
     txaux: TxAux,
     txins: Vec<TxWithOutputs>,
     info: ChainInfo,
+    txdb: Arc<Tree>,
 ) -> Result<(Fee, Option<StakedState>), ()> {
     let txins_enc: Vec<u8> = txins.encode();
     let txaux_enc: Vec<u8> = txaux.encode();
     let info_enc: Vec<u8> = info.encode();
+    let sealed_log_size = size_of::<sgx_sealed_data_t>() + txaux_enc.len();
+    let mut sealed_log: Vec<u8> = Vec::with_capacity(sealed_log_size);
     let mut retval: sgx_status_t = sgx_status_t::SGX_SUCCESS;
     let mut actual_fee_paid = 0;
     let result = unsafe {
@@ -82,6 +92,8 @@ pub fn check_transfertx(
             eid,
             &mut retval,
             &mut actual_fee_paid,
+            sealed_log.as_mut_ptr(),
+            sealed_log_size as u32,
             info_enc.as_ptr(),
             info_enc.len(),
             txaux_enc.as_ptr(),
@@ -94,6 +106,7 @@ pub fn check_transfertx(
         let fee = Fee::new(
             Coin::new(actual_fee_paid).expect("fee should not be larger than coin supply"),
         );
+        let _ = txdb.set(&txaux.tx_id(), sealed_log).map_err(|_| ())?;
         Ok((fee, None))
     } else {
         Err(())
@@ -106,6 +119,7 @@ pub fn check_deposit_tx(
     txins: Vec<TxWithOutputs>,
     maccount: Option<StakedState>,
     info: ChainInfo,
+    _txdb: Arc<Tree>,
 ) -> Result<(Fee, Option<StakedState>), ()> {
     let txins_enc: Vec<u8> = txins.encode();
     let txaux_enc: Vec<u8> = txaux.encode();
@@ -163,10 +177,13 @@ pub fn check_withdraw_tx(
     txaux: TxAux,
     mut account: StakedState,
     info: ChainInfo,
+    txdb: Arc<Tree>,
 ) -> Result<(Fee, Option<StakedState>), ()> {
     let account_enc: Vec<u8> = account.encode();
     let txaux_enc: Vec<u8> = txaux.encode();
     let info_enc: Vec<u8> = info.encode();
+    let sealed_log_size = size_of::<sgx_sealed_data_t>() + txaux_enc.len();
+    let mut sealed_log: Vec<u8> = Vec::with_capacity(sealed_log_size);
     let mut retval: sgx_status_t = sgx_status_t::SGX_SUCCESS;
     let mut actual_fee_paid = 0;
     let result = unsafe {
@@ -174,6 +191,8 @@ pub fn check_withdraw_tx(
             eid,
             &mut retval,
             &mut actual_fee_paid,
+            sealed_log.as_mut_ptr(),
+            sealed_log_size as u32,
             info_enc.as_ptr(),
             info_enc.len(),
             txaux_enc.as_ptr(),
@@ -187,6 +206,7 @@ pub fn check_withdraw_tx(
             Coin::new(actual_fee_paid).expect("fee should not be larger than coin supply"),
         );
         account.withdraw();
+        let _ = txdb.set(&txaux.tx_id(), sealed_log).map_err(|_| ())?;
         Ok((fee, Some(account)))
     } else {
         Err(())

@@ -31,53 +31,42 @@
 use sgx_types::*;
 use sgx_urts::SgxEnclave;
 
-use std::fs;
-use std::io::{Read, Write};
-use std::path;
+use log::{info, warn};
+use sled::Tree;
+use std::sync::Arc;
 
 static ENCLAVE_FILE: &'static str = "enclave.signed.so";
-static ENCLAVE_TOKEN: &'static str = "enclave.token";
 
-pub fn init_enclave() -> SgxResult<SgxEnclave> {
-    let mut launch_token: sgx_launch_token_t = [0; 1024];
+const ENCLAVE_TOKEN_KEY: &[u8] = b"enclave.token";
+const TOKEN_LEN: usize = 1024;
+
+pub fn init_enclave(metadb: Arc<Tree>) -> SgxResult<SgxEnclave> {
+    let mut launch_token: sgx_launch_token_t = [0; TOKEN_LEN];
     let mut launch_token_updated: i32 = 0;
     // Step 1: try to retrieve the launch token saved by last transaction
     //         if there is no token, then create a new one.
     //
-    // try to get the token saved in $HOME */
-    let mut home_dir = path::PathBuf::new();
-    let use_token = match dirs::home_dir() {
-        Some(path) => {
-            println!("[+] Home dir is {}", path.display());
-            home_dir = path;
-            true
+    // try to get the token saved in the key-value db */
+    let stored_token = match metadb.get(ENCLAVE_TOKEN_KEY) {
+        Ok(Some(token)) => {
+            info!("[+] Open token file success! ");
+            if token.len() != TOKEN_LEN {
+                warn!(
+                    "[+] Token file invalid, will create new token file -- size: {} (expected {})",
+                    token.len(),
+                    TOKEN_LEN
+                );
+                false
+            } else {
+                launch_token.copy_from_slice(&token);
+                true
+            }
         }
-        None => {
-            println!("[-] Cannot get home dir");
+        _ => {
+            warn!("[-] Open token file error or not found! Will create one.");
             false
         }
     };
-
-    let token_file: path::PathBuf = home_dir.join(ENCLAVE_TOKEN);;
-    if use_token == true {
-        match fs::File::open(&token_file) {
-            Err(_) => {
-                println!(
-                    "[-] Open token file {} error! Will create one.",
-                    token_file.as_path().to_str().unwrap()
-                );
-            }
-            Ok(mut f) => {
-                println!("[+] Open token file success! ");
-                match f.read(&mut launch_token) {
-                    Ok(1024) => {
-                        println!("[+] Token file valid!");
-                    }
-                    _ => println!("[+] Token file invalid, will create new token file"),
-                }
-            }
-        }
-    }
 
     // Step 2: call sgx_create_enclave to initialize an enclave instance
     // Debug Support: set 2nd parameter to 1
@@ -95,15 +84,13 @@ pub fn init_enclave() -> SgxResult<SgxEnclave> {
     )?;
 
     // Step 3: save the launch token if it is updated
-    if use_token == true && launch_token_updated != 0 {
-        // reopen the file with write capablity
-        match fs::File::create(&token_file) {
-            Ok(mut f) => match f.write_all(&launch_token) {
-                Ok(()) => println!("[+] Saved updated launch token!"),
-                Err(_) => println!("[-] Failed to save updated launch token!"),
-            },
+    if (stored_token && launch_token_updated != 0) || !stored_token {
+        match metadb.set(ENCLAVE_TOKEN_KEY, launch_token.to_vec()) {
+            Ok(_) => {
+                info!("[+] Saved updated launch token!");
+            }
             Err(_) => {
-                println!("[-] Failed to save updated enclave token, but doesn't matter");
+                warn!("[-] Failed to save updated launch token!");
             }
         }
     }

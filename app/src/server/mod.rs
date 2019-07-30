@@ -4,19 +4,30 @@ use enclave_protocol::{EnclaveRequest, EnclaveResponse, FLAGS};
 use log::{debug, info};
 use parity_codec::{Decode, Encode};
 use sgx_urts::SgxEnclave;
+use sled::Tree;
+use std::sync::Arc;
 use zmq::{Context, Error, Socket, REP};
 
 pub struct TxValidationServer {
     socket: Socket,
     enclave: SgxEnclave,
+    txdb: Arc<Tree>,
 }
 
 impl TxValidationServer {
-    pub fn new(connection_str: &str, enclave: SgxEnclave) -> Result<TxValidationServer, Error> {
+    pub fn new(
+        connection_str: &str,
+        enclave: SgxEnclave,
+        txdb: Arc<Tree>,
+    ) -> Result<TxValidationServer, Error> {
         let ctx = Context::new();
         let socket = ctx.socket(REP)?;
         socket.bind(connection_str)?;
-        Ok(TxValidationServer { socket, enclave })
+        Ok(TxValidationServer {
+            socket,
+            enclave,
+            txdb,
+        })
     }
 
     pub fn execute(&mut self) {
@@ -45,6 +56,7 @@ impl TxValidationServer {
                             tx,
                             inputs,
                             info,
+                            self.txdb.clone(),
                         ))
                     }
                     Some(EnclaveRequest::VerifyTx {
@@ -60,6 +72,7 @@ impl TxValidationServer {
                             inputs,
                             account,
                             info,
+                            self.txdb.clone(),
                         ))
                     }
                     Some(EnclaveRequest::VerifyTx {
@@ -74,6 +87,7 @@ impl TxValidationServer {
                             tx,
                             account,
                             info,
+                            self.txdb.clone(),
                         ))
                     }
                     Some(_) => {

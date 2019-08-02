@@ -1,9 +1,10 @@
-use parity_codec::{Decode, Encode};
+use failure::ResultExt;
+use parity_scale_codec::{Decode, Encode};
 
 use chain_core::tx::data::{txid_hash, TxId};
 use chain_core::tx::{TxAux, TxWithOutputs};
 use client_common::tendermint::Client;
-use client_common::{Error, ErrorKind, PrivateKey, Result, SignedTransaction, Transaction};
+use client_common::{ErrorKind, PrivateKey, Result, SignedTransaction, Transaction};
 use enclave_protocol::{
     DecryptionRequest, DecryptionRequestBody, DecryptionResponse, EncryptionRequest,
     EncryptionResponse,
@@ -12,6 +13,7 @@ use enclave_protocol::{
 use crate::TransactionCipher;
 
 /// Implementation of transaction cipher which uses Tendermint ABCI to encrypt/decrypt transactions
+#[derive(Debug, Clone)]
 pub struct AbciTransactionCipher<C>
 where
     C: Client,
@@ -36,7 +38,7 @@ where
             .bytes()?;
 
         let encrypted_transaction = EncryptionResponse::decode(&mut response.as_slice())
-            .ok_or_else(|| Error::from(ErrorKind::DeserializationError))?
+            .context(ErrorKind::DeserializationError)?
             .tx;
 
         Ok(encrypted_transaction)
@@ -70,7 +72,7 @@ where
             .bytes()?;
 
         let txs = DecryptionResponse::decode(&mut response.as_slice())
-            .ok_or_else(|| Error::from(ErrorKind::DeserializationError))?
+            .context(ErrorKind::DeserializationError)?
             .txs;
 
         let transactions = txs

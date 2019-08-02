@@ -9,7 +9,7 @@ use chain_core::tx::fee::Fee;
 use chain_core::tx::TxAux;
 use chain_core::ChainInfo;
 use chain_tx_validation::TxWithOutputs;
-use parity_codec::Encode;
+use parity_scale_codec::Encode;
 use sled::Tree;
 use std::mem::size_of;
 use std::sync::Arc;

@@ -2,7 +2,7 @@ use crate::enclave_u::{check_deposit_tx, check_initchain, check_transfertx, chec
 use chain_core::tx::TxAux;
 use enclave_protocol::{EnclaveRequest, EnclaveResponse, FLAGS};
 use log::{debug, info};
-use parity_codec::{Decode, Encode};
+use parity_scale_codec::{Decode, Encode};
 use sgx_urts::SgxEnclave;
 use sled::Tree;
 use std::sync::Arc;
@@ -37,45 +37,45 @@ impl TxValidationServer {
                 debug!("received a message");
                 let mcmd = EnclaveRequest::decode(&mut msg.as_slice());
                 let resp = match mcmd {
-                    Some(EnclaveRequest::CheckChain { chain_hex_id }) => {
+                    Ok(EnclaveRequest::CheckChain { chain_hex_id }) => {
                         debug!("check chain");
                         EnclaveResponse::CheckChain(check_initchain(
                             self.enclave.geteid(),
                             chain_hex_id,
                         ))
                     }
-                    Some(EnclaveRequest::VerifyTx {
+                    Ok(EnclaveRequest::VerifyTx {
                         tx: tx @ TxAux::TransferTx { .. },
-                        inputs,
                         info,
                         ..
                     }) => {
                         debug!("verify transfer tx");
+                        // FIXME: INPUTS / local lookup!
                         EnclaveResponse::VerifyTx(check_transfertx(
                             self.enclave.geteid(),
                             tx,
-                            inputs,
+                            vec![],
                             info,
                             self.txdb.clone(),
                         ))
                     }
-                    Some(EnclaveRequest::VerifyTx {
+                    Ok(EnclaveRequest::VerifyTx {
                         tx: tx @ TxAux::DepositStakeTx { .. },
-                        inputs,
                         info,
                         account,
                     }) => {
                         debug!("verify deposit tx");
+                        // FIXME: INPUTS / local lookup!
                         EnclaveResponse::VerifyTx(check_deposit_tx(
                             self.enclave.geteid(),
                             tx,
-                            inputs,
+                            vec![],
                             account,
                             info,
                             self.txdb.clone(),
                         ))
                     }
-                    Some(EnclaveRequest::VerifyTx {
+                    Ok(EnclaveRequest::VerifyTx {
                         tx: tx @ TxAux::WithdrawUnbondedStakeTx { .. },
                         info,
                         account: Some(account),
@@ -90,12 +90,12 @@ impl TxValidationServer {
                             self.txdb.clone(),
                         ))
                     }
-                    Some(_) => {
+                    Ok(_) => {
                         debug!("verify other tx");
                         EnclaveResponse::UnsupportedTxType
                     }
-                    None => {
-                        debug!("unknown request / failed to decode");
+                    Err(e) => {
+                        debug!("unknown request / failed to decode: {}", e);
                         EnclaveResponse::UnsupportedTxType
                     }
                 };

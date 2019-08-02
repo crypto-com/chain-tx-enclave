@@ -17,7 +17,7 @@ use chain_tx_validation::{
     TxWithOutputs,
 };
 use enclave_macro::get_network_id;
-use parity_codec::{Decode, Encode};
+use parity_scale_codec::{Decode, Encode, Error};
 use sgx_tseal::SgxSealedData;
 use sgx_types::{sgx_sealed_data_t, sgx_status_t};
 use std::prelude::v1::Vec;
@@ -40,8 +40,10 @@ fn check_chain_info(chain_info: *const u8, chain_info_len: usize) -> Option<Chai
     let mut chain_info_slice = unsafe { slice::from_raw_parts(chain_info, chain_info_len) };
     let chain_info = ChainInfo::decode(&mut chain_info_slice);
     match chain_info {
-        Some(ChainInfo { chain_hex_id, .. }) if chain_hex_id != NETWORK_HEX_ID => None,
-        _ => chain_info,
+        Ok(ChainInfo { chain_hex_id, .. }) if chain_hex_id == NETWORK_HEX_ID => {
+            Some(chain_info.unwrap())
+        }
+        _ => None,
     }
 }
 
@@ -67,7 +69,7 @@ pub extern "C" fn ecall_check_transfer_tx(
 
     let mut txaux_slice = unsafe { slice::from_raw_parts(txaux, txaux_len) };
     let txaux = TxAux::decode(&mut txaux_slice);
-    if let Some(TxAux::TransferTx {
+    if let Ok(TxAux::TransferTx {
         txid,
         payload: TxObfuscated { txpayload, .. },
         no_of_outputs,
@@ -76,10 +78,10 @@ pub extern "C" fn ecall_check_transfer_tx(
     {
         // FIXME: decrypting
         let mut inputs_slice = unsafe { slice::from_raw_parts(txsin, txsin_len) };
-        let inputs: Option<Vec<TxWithOutputs>> = Decode::decode(&mut inputs_slice);
+        let inputs: Result<Vec<TxWithOutputs>, Error> = Decode::decode(&mut inputs_slice);
         let plaintx = PlainTxAux::decode(&mut txpayload.as_slice());
         match (plaintx, inputs) {
-            (Some(PlainTxAux::TransferTx(tx, witness)), Some(input_txs)) => {
+            (Ok(PlainTxAux::TransferTx(tx, witness)), Ok(input_txs)) => {
                 if tx.id() != txid || tx.outputs.len() as TxoIndex != no_of_outputs {
                     return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
                 }
@@ -137,17 +139,17 @@ pub extern "C" fn ecall_check_deposit_tx(
 
     let mut txaux_slice = unsafe { slice::from_raw_parts(txaux, txaux_len) };
     let txaux = TxAux::decode(&mut txaux_slice);
-    if let Some(TxAux::DepositStakeTx {
+    if let Ok(TxAux::DepositStakeTx {
         tx,
         payload: TxObfuscated { txpayload, .. },
     }) = txaux
     {
         // FIXME: decrypting
         let mut inputs_slice = unsafe { slice::from_raw_parts(txsin, txsin_len) };
-        let inputs: Option<Vec<TxWithOutputs>> = Decode::decode(&mut inputs_slice);
+        let inputs: Result<Vec<TxWithOutputs>, Error> = Decode::decode(&mut inputs_slice);
         let plaintx = PlainTxAux::decode(&mut txpayload.as_slice());
         match (plaintx, inputs) {
-            (Some(PlainTxAux::DepositStakeTx(witness)), Some(input_txs)) => {
+            (Ok(PlainTxAux::DepositStakeTx(witness)), Ok(input_txs)) => {
                 let result = verify_bonded_deposit_core(&tx, &witness, info, input_txs);
                 if result.is_err() {
                     return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
@@ -189,7 +191,7 @@ pub extern "C" fn ecall_check_withdraw_tx(
 
     let mut txaux_slice = unsafe { slice::from_raw_parts(txaux, txaux_len) };
     let txaux = TxAux::decode(&mut txaux_slice);
-    if let Some(TxAux::WithdrawUnbondedStakeTx {
+    if let Ok(TxAux::WithdrawUnbondedStakeTx {
         txid,
         no_of_outputs,
         payload: TxObfuscated { txpayload, .. },
@@ -206,7 +208,7 @@ pub extern "C" fn ecall_check_withdraw_tx(
         let account = StakedState::decode(&mut account_slice);
         let plaintx = PlainTxAux::decode(&mut txpayload.as_slice());
         match (plaintx, account) {
-            (Some(PlainTxAux::WithdrawUnbondedStakeTx(tx)), Some(account)) => {
+            (Ok(PlainTxAux::WithdrawUnbondedStakeTx(tx)), Ok(account)) => {
                 if tx.id() != txid
                     || no_of_outputs != tx.outputs.len() as TxoIndex
                     || account.address != address.unwrap()

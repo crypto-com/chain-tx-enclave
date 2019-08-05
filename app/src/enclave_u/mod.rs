@@ -8,7 +8,6 @@ use chain_core::state::account::StakedState;
 use chain_core::tx::fee::Fee;
 use chain_core::tx::TxAux;
 use chain_core::ChainInfo;
-use chain_tx_validation::TxWithOutputs;
 use parity_scale_codec::Encode;
 use sled::Tree;
 use std::mem::size_of;
@@ -76,7 +75,7 @@ pub fn check_initchain(eid: sgx_enclave_id_t, chain_hex_id: u8) -> Result<(), ()
 pub fn check_transfertx(
     eid: sgx_enclave_id_t,
     txaux: TxAux,
-    txins: Vec<TxWithOutputs>,
+    txins: Vec<Vec<u8>>,
     info: ChainInfo,
     txdb: Arc<Tree>,
 ) -> Result<(Fee, Option<StakedState>), ()> {
@@ -116,7 +115,7 @@ pub fn check_transfertx(
 pub fn check_deposit_tx(
     eid: sgx_enclave_id_t,
     txaux: TxAux,
-    txins: Vec<TxWithOutputs>,
+    txins: Vec<Vec<u8>>,
     maccount: Option<StakedState>,
     info: ChainInfo,
     _txdb: Arc<Tree>,

@@ -1,5 +1,5 @@
 use crate::enclave_u::init_enclave::init_enclave;
-use crate::enclave_u::{check_initchain, check_withdraw_tx};
+use crate::enclave_u::{check_initchain, check_transfertx, check_withdraw_tx};
 use chain_core::common::MerkleTree;
 use chain_core::init::address::RedeemAddress;
 use chain_core::init::coin::Coin;
@@ -17,18 +17,21 @@ use chain_core::tx::{
         access::{TxAccess, TxAccessPolicy},
         address::ExtendedAddr,
         attribute::TxAttributes,
-        input::TxoIndex,
+        input::{TxoIndex, TxoPointer},
         output::TxOut,
-        TxId,
+        Tx, TxId,
     },
+    witness::TxInWitness,
     TxAux,
 };
 use chain_core::ChainInfo;
 use env_logger::{Builder, WriteStyle};
 use log::LevelFilter;
 use log::{debug, error, info};
-use parity_codec::Encode;
-use secp256k1::{key::PublicKey, key::SecretKey, Message, Secp256k1, Signing};
+use parity_scale_codec::Encode;
+use secp256k1::{
+    key::PublicKey, key::SecretKey, schnorrsig::schnorr_sign, Message, Secp256k1, Signing,
+};
 use sled::Db;
 
 pub fn get_ecdsa_witness<C: Signing>(
@@ -91,7 +94,7 @@ pub fn test_sealing() {
     let eaddr = ExtendedAddr::OrTree(merkle_tree.root_hash());
     let tx0 = WithdrawUnbondedTx::new(
         0,
-        vec![TxOut::new_with_timelock(eaddr, Coin::one(), 0)],
+        vec![TxOut::new_with_timelock(eaddr.clone(), Coin::one(), 0)],
         TxAttributes::new_with_access(
             TEST_NETWORK_ID,
             vec![TxAccessPolicy::new(public_key.clone(), TxAccess::AllData)],
@@ -128,12 +131,67 @@ pub fn test_sealing() {
     let r = check_withdraw_tx(enclave.geteid(), withdrawtx, account, info, txdb.clone());
     assert!(r.is_ok());
     let ta = txdb.get(&txid);
-    match ta {
-        Ok(Some(_)) => {
+    let sealedtx = match ta {
+        Ok(Some(tx)) => {
             debug!("new tx in DB!");
+            tx.to_vec()
         }
         _ => {
             assert!(false, "new tx not in db");
+            vec![]
+        }
+    };
+
+    let halfcoin = Coin::from(5000_0000u32);
+    let utxo1 = TxoPointer::new(*txid, 0);
+    let mut tx1 = Tx::new();
+    tx1.attributes = TxAttributes::new(TEST_NETWORK_ID);
+    tx1.add_input(utxo1);
+    tx1.add_output(TxOut::new(eaddr.clone(), halfcoin));
+    let txid1 = tx1.id();
+    let witness1 = vec![TxInWitness::TreeSig(
+        schnorr_sign(&secp, &Message::from_slice(&txid1).unwrap(), &secret_key).0,
+        merkle_tree
+            .generate_proof(RawPubkey::from(public_key.serialize()))
+            .unwrap(),
+    )]
+    .into();
+    let plain_txaux = PlainTxAux::TransferTx(tx1.clone(), witness1);
+    let transfertx = TxAux::TransferTx {
+        txid: tx1.id(),
+        inputs: tx1.inputs.clone(),
+        no_of_outputs: tx1.outputs.len() as TxoIndex,
+        payload: TxObfuscated {
+            key_from: 0,
+            nonce: [0u8; 12],
+            txpayload: plain_txaux.encode(),
+        },
+    };
+
+    let tc = txdb.get(&txid1);
+    match tc {
+        Ok(None) => {
+            debug!("new 2nd tx not in DB yet");
+        }
+        _ => {
+            assert!(false, "new 2nd tx already in db");
+        }
+    };
+    let r2 = check_transfertx(
+        enclave.geteid(),
+        transfertx,
+        vec![sealedtx],
+        info,
+        txdb.clone(),
+    );
+    assert!(r2.is_ok());
+    let td = txdb.get(&txid1);
+    match td {
+        Ok(Some(tx)) => {
+            debug!("new 2nd tx in DB!");
+        }
+        _ => {
+            assert!(false, "new 2nd tx not in db");
         }
     };
 

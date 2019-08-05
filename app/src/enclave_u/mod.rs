@@ -83,7 +83,7 @@ pub fn check_transfertx(
     let txaux_enc: Vec<u8> = txaux.encode();
     let info_enc: Vec<u8> = info.encode();
     let sealed_log_size = size_of::<sgx_sealed_data_t>() + txaux_enc.len();
-    let mut sealed_log: Vec<u8> = Vec::with_capacity(sealed_log_size);
+    let mut sealed_log: Vec<u8> = vec![0u8; sealed_log_size];
     let mut retval: sgx_status_t = sgx_status_t::SGX_SUCCESS;
     let mut actual_fee_paid = 0;
     let result = unsafe {
@@ -182,7 +182,7 @@ pub fn check_withdraw_tx(
     let txaux_enc: Vec<u8> = txaux.encode();
     let info_enc: Vec<u8> = info.encode();
     let sealed_log_size = size_of::<sgx_sealed_data_t>() + txaux_enc.len();
-    let mut sealed_log: Vec<u8> = Vec::with_capacity(sealed_log_size);
+    let mut sealed_log: Vec<u8> = vec![0u8; sealed_log_size];
     let mut retval: sgx_status_t = sgx_status_t::SGX_SUCCESS;
     let mut actual_fee_paid = 0;
     let result = unsafe {

@@ -285,7 +285,6 @@ pub extern "C" fn ecall_check_withdraw_tx(
                     }
                     *actual_fee_paid = actual_fee;
                 }
-                // FIXME: sealing
                 sgx_status_t::SGX_SUCCESS
             }
             _ => {

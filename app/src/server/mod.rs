@@ -1,4 +1,6 @@
 use crate::enclave_u::{check_deposit_tx, check_initchain, check_transfertx, check_withdraw_tx};
+use chain_core::state::account::DepositBondTx;
+use chain_core::tx::data::input::TxoPointer;
 use chain_core::tx::TxAux;
 use enclave_protocol::{EnclaveRequest, EnclaveResponse, FLAGS};
 use log::{debug, info};
@@ -30,6 +32,29 @@ impl TxValidationServer {
         })
     }
 
+    fn lookup_txids(&self, inputs: &[TxoPointer]) -> Option<Vec<Vec<u8>>> {
+        let mut result = Vec::with_capacity(inputs.len());
+        for input in inputs.iter() {
+            if let Ok(Some(txin)) = self.txdb.get(input.id) {
+                result.push(txin.to_vec());
+            } else {
+                return None;
+            }
+        }
+        Some(result)
+    }
+
+    fn lookup(&self, tx: &TxAux) -> Option<Vec<Vec<u8>>> {
+        match tx {
+            TxAux::TransferTx { inputs, .. } => self.lookup_txids(inputs),
+            TxAux::DepositStakeTx {
+                tx: DepositBondTx { inputs, .. },
+                ..
+            } => self.lookup_txids(inputs),
+            _ => None,
+        }
+    }
+
     pub fn execute(&mut self) {
         info!("running zmq server");
         loop {
@@ -50,14 +75,17 @@ impl TxValidationServer {
                         ..
                     }) => {
                         debug!("verify transfer tx");
-                        // FIXME: INPUTS / local lookup!
-                        EnclaveResponse::VerifyTx(check_transfertx(
-                            self.enclave.geteid(),
-                            tx,
-                            vec![],
-                            info,
-                            self.txdb.clone(),
-                        ))
+                        if let Some(txins) = self.lookup(&tx) {
+                            EnclaveResponse::VerifyTx(check_transfertx(
+                                self.enclave.geteid(),
+                                tx,
+                                txins,
+                                info,
+                                self.txdb.clone(),
+                            ))
+                        } else {
+                            EnclaveResponse::VerifyTx(Err(()))
+                        }
                     }
                     Ok(EnclaveRequest::VerifyTx {
                         tx: tx @ TxAux::DepositStakeTx { .. },
@@ -65,15 +93,18 @@ impl TxValidationServer {
                         account,
                     }) => {
                         debug!("verify deposit tx");
-                        // FIXME: INPUTS / local lookup!
-                        EnclaveResponse::VerifyTx(check_deposit_tx(
-                            self.enclave.geteid(),
-                            tx,
-                            vec![],
-                            account,
-                            info,
-                            self.txdb.clone(),
-                        ))
+                        if let Some(txins) = self.lookup(&tx) {
+                            EnclaveResponse::VerifyTx(check_deposit_tx(
+                                self.enclave.geteid(),
+                                tx,
+                                txins,
+                                account,
+                                info,
+                                self.txdb.clone(),
+                            ))
+                        } else {
+                            EnclaveResponse::VerifyTx(Err(()))
+                        }
                     }
                     Ok(EnclaveRequest::VerifyTx {
                         tx: tx @ TxAux::WithdrawUnbondedStakeTx { .. },

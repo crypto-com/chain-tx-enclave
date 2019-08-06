@@ -1,4 +1,4 @@
-use crate::enclave_u::init_enclave::init_enclave;
+use enclave_u_common::enclave_u::{init_enclave, VALIDATION_TOKEN_KEY};
 use crate::enclave_u::{check_initchain, check_transfertx, check_withdraw_tx};
 use chain_core::common::MerkleTree;
 use chain_core::init::address::RedeemAddress;
@@ -72,7 +72,7 @@ pub fn test_sealing() {
         .open_tree(crate::TX_KEYSPACE)
         .expect("failed to open a tx keyspace");
 
-    let enclave = match init_enclave(metadb) {
+    let enclave = match init_enclave(metadb, true, VALIDATION_TOKEN_KEY) {
         Ok(r) => {
             info!("[+] Init Enclave Successful {}!", r.geteid());
             r

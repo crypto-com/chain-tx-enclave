@@ -1,5 +1,3 @@
-pub mod init_enclave;
-
 use sgx_types::*;
 
 use chain_core::init::coin::Coin;

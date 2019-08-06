@@ -8,6 +8,7 @@
 **/lib/libenclave.a
 **/bin/tx-validation-app
 **/bin/enclave.signed.so
+**/bin/tx-query-app
 **/enclave/Enclave_t.*
 **/enclave/enclave.so
 **/app/Enclave_u.*

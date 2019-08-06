@@ -7,8 +7,8 @@ CP  = cp
 
 REPO = https://github.com/baidu/rust-sgx-sdk.git
 SDK_PATH_GIT = rust-sgx-sdk-github
-SDK_PATH = rust-sgx-sdk
-VERSION_FILE = rust-sgx-sdk/version
+SDK_PATH = ../rust-sgx-sdk
+VERSION_FILE = ../rust-sgx-sdk/version
 LOCAL_VERSION = $(shell cat $(VERSION_FILE))
 COMMAND = git ls-remote $(REPO) HEAD | awk '{ print $$1 }'
 REMOTE_VERSION = $(shell $(COMMAND))

@@ -30,7 +30,7 @@
 # Modifications Copyright 2019 Foris Limited (licensed under the Apache License, Version 2.0)
 
 ######## Update SGX SDK ########
-include UpdateRustSGXSDK.mk
+include ../UpdateRustSGXSDK.mk
 
 ######## SGX SDK Settings ########
 
@@ -78,8 +78,8 @@ endif
 
 CUSTOM_LIBRARY_PATH := ./lib
 CUSTOM_BIN_PATH := ./bin
-CUSTOM_EDL_PATH := ./rust-sgx-sdk/edl
-CUSTOM_COMMON_PATH := ./rust-sgx-sdk/common
+CUSTOM_EDL_PATH := ./../rust-sgx-sdk/edl
+CUSTOM_COMMON_PATH := ./../rust-sgx-sdk/common
 
 ######## EDL Settings ########
 
@@ -166,7 +166,7 @@ enclave/Enclave_t.o: $(Enclave_EDL_Files)
 	@echo "CC   <=  $<"
 
 $(RustEnclave_Name): enclave compiler-rt enclave/Enclave_t.o
-	cp ./rust-sgx-sdk/compiler-rt/libcompiler-rt-patch.a ./lib
+	cp ./../rust-sgx-sdk/compiler-rt/libcompiler-rt-patch.a ./lib
 	@$(CXX) enclave/Enclave_t.o -o $@ $(RustEnclave_Link_Flags)
 	@echo "LINK =>  $@"
 
@@ -182,7 +182,7 @@ enclave:
 
 .PHONY: compiler-rt
 compiler-rt:
-	$(MAKE) -C ./rust-sgx-sdk/compiler-rt/ 2> /dev/null
+	$(MAKE) -C ./../rust-sgx-sdk/compiler-rt/ 2> /dev/null
 
 .PHONY: clean
 clean:

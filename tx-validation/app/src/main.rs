@@ -3,23 +3,13 @@ mod server;
 #[cfg(feature = "sgx-test")]
 mod test;
 
-use crate::enclave_u::init_enclave::init_enclave;
+use enclave_u_common::{storage_path, META_KEYSPACE, TX_KEYSPACE};
+use enclave_u_common::enclave_u::{init_enclave, VALIDATION_TOKEN_KEY};
 use crate::server::TxValidationServer;
 use log::{error, info};
 use sled::Db;
 use std::env;
 use std::thread;
-
-/// TODO: connection string as env variable?
-fn storage_path() -> String {
-    match std::env::var("TX_ENCLAVE_STORAGE") {
-        Ok(path) => path,
-        Err(_) => ".enclave".to_owned(),
-    }
-}
-
-const META_KEYSPACE: &[u8] = b"meta";
-const TX_KEYSPACE: &[u8] = b"tx";
 
 #[cfg(feature = "sgx-test")]
 fn main() {
@@ -42,7 +32,7 @@ fn main() {
         .open_tree(TX_KEYSPACE)
         .expect("failed to open a tx keyspace");
 
-    let enclave = match init_enclave(metadb) {
+    let enclave = match init_enclave(metadb, true, VALIDATION_TOKEN_KEY) {
         Ok(r) => {
             info!("[+] Init Enclave Successful {}!", r.geteid());
             r

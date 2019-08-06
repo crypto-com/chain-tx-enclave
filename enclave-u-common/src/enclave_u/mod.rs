@@ -37,17 +37,19 @@ use std::sync::Arc;
 
 static ENCLAVE_FILE: &'static str = "enclave.signed.so";
 
-const ENCLAVE_TOKEN_KEY: &[u8] = b"enclave.token";
+pub const VALIDATION_TOKEN_KEY: &[u8] = b"tx-validation-enclave.token";
+pub const QUERY_TOKEN_KEY: &[u8] = b"tx-query-enclave.token";
+
 const TOKEN_LEN: usize = 1024;
 
-pub fn init_enclave(metadb: Arc<Tree>) -> SgxResult<SgxEnclave> {
+pub fn init_enclave(metadb: Arc<Tree>, debug: bool, token_key: &[u8]) -> SgxResult<SgxEnclave> {
     let mut launch_token: sgx_launch_token_t = [0; TOKEN_LEN];
     let mut launch_token_updated: i32 = 0;
     // Step 1: try to retrieve the launch token saved by last transaction
     //         if there is no token, then create a new one.
     //
     // try to get the token saved in the key-value db */
-    let stored_token = match metadb.get(ENCLAVE_TOKEN_KEY) {
+    let stored_token = match metadb.get(token_key) {
         Ok(Some(token)) => {
             info!("[+] Open token file success! ");
             if token.len() != TOKEN_LEN {
@@ -70,7 +72,7 @@ pub fn init_enclave(metadb: Arc<Tree>) -> SgxResult<SgxEnclave> {
 
     // Step 2: call sgx_create_enclave to initialize an enclave instance
     // Debug Support: set 2nd parameter to 1
-    let debug = 1;
+    let debug = if debug {1} else {0};
     let mut misc_attr = sgx_misc_attribute_t {
         secs_attr: sgx_attributes_t { flags: 0, xfrm: 0 },
         misc_select: 0,
@@ -85,7 +87,7 @@ pub fn init_enclave(metadb: Arc<Tree>) -> SgxResult<SgxEnclave> {
 
     // Step 3: save the launch token if it is updated
     if (stored_token && launch_token_updated != 0) || !stored_token {
-        match metadb.set(ENCLAVE_TOKEN_KEY, launch_token.to_vec()) {
+        match metadb.set(token_key, launch_token.to_vec()) {
             Ok(_) => {
                 info!("[+] Saved updated launch token!");
             }

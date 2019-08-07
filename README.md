@@ -56,6 +56,8 @@ chain-tx \
 ```bash
 $ export SGX_MODE=<SW|HW>
 $ export NETWORK_ID=<NETWORK_HEX_ID>
+$ cd ./tx-validation
 $ make
-$ ./tx-validation/bin/tx-validator-app
+$ cd ./bin
+$ ./tx-validator-app tcp://0.0.0.0:25933
 ```

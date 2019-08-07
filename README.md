@@ -57,5 +57,5 @@ chain-tx \
 $ export SGX_MODE=<SW|HW>
 $ export NETWORK_ID=<NETWORK_HEX_ID>
 $ make
-$ ./tx-validation/
+$ ./tx-validation/bin/tx-validator-app
 ```

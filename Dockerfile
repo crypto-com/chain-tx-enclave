@@ -19,6 +19,6 @@ COPY . .
 
 RUN ./make.sh
 
-WORKDIR /root
+WORKDIR /root/tx-validation/bin
 
 CMD ["./entrypoint.sh"]

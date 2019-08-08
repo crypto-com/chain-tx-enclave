@@ -19,7 +19,6 @@ COPY . .
 
 RUN ./make.sh
 
-WORKDIR /root/bin
+WORKDIR /root/tx-validation/bin
 
-CMD ["../entrypoint.sh"]
-# CMD ["/bin/bash", "-c", "source /root/.docker_bashrc && ./tx-validation-app tcp://0.0.0.0:${APP_PORT}"]
+CMD ["./entrypoint.sh"]

@@ -21,4 +21,4 @@ RUN ./tx-validation/make.sh
 
 WORKDIR /root/tx-validation/bin
 
-CMD ["./entrypoint.sh"]
+CMD ["../entrypoint.sh"]

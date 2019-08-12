@@ -1,8 +1,8 @@
 use super::genesis_command::GenesisCommand;
 use super::genesis_dev_config::GenesisDevConfig;
 use chain_core::init::config::{InitialValidator, ValidatorKeyType};
-use chain_core::init::{address::RedeemAddress, coin::Coin};
 
+use chain_core::init::{address::RedeemAddress, coin::Coin, config::InitConfig};
 use chrono::DateTime;
 use chrono::SecondsFormat;
 use client_common::storage::SledStorage;
@@ -15,6 +15,7 @@ use serde_json::json;
 use std::fs;
 use std::fs::File;
 use std::io;
+use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
 
@@ -26,12 +27,14 @@ use client_common::ErrorKind;
 pub struct InitCommand {
     chainid: String,
     app_hash: String,
-    app_state: String,
+    app_state: Option<InitConfig>,
     genesis_dev: GenesisDevConfig,
     tendermint_pubkey: String,
     staking_account_address: String,
+    other_staking_accounts: Vec<String>,
     distribution_addresses: Vec<String>,
     remain_coin: Coin,
+    tendermint_command: String,
 }
 
 impl InitCommand {
@@ -39,12 +42,14 @@ impl InitCommand {
         InitCommand {
             chainid: "".to_string(),
             app_hash: "".to_string(),
-            app_state: "".to_string(),
+            app_state: None,
             genesis_dev: GenesisDevConfig::new(),
             tendermint_pubkey: "".to_string(),
             staking_account_address: "".to_string(),
+            other_staking_accounts: vec![],
             distribution_addresses: vec![],
             remain_coin: Coin::max(),
+            tendermint_command: "./tendermint".to_string(),
         }
     }
 
@@ -99,12 +104,15 @@ impl InitCommand {
     }
     fn read_wallets(&mut self) -> Result<(), Error> {
         let default_address = RedeemAddress::default().to_string();
-        let default_addresses = [
-            "0xc55139f8d416511020293dd3b121ee8beb3bd469",
-            "0x9b4597438fc9e72617232a7aed37567405cb80dd",
-            "0xf75dc04a0a77c8178a6880c44c6d8a8ffb436093",
+        assert!(self.other_staking_accounts.len() > 3);
+        let default_addresses = self.other_staking_accounts.clone();
+        let default_coins = [
+            "12500000000",
+            "12500000000",
+            "12500000000",
+            "12500000000",
+            "12500000000",
         ];
-        let default_coins = ["25000000000", "25000000000"];
         println!(
             "maximum coin to distribute={}",
             self.remain_coin.to_string()
@@ -175,6 +183,12 @@ impl InitCommand {
     fn read_incentives(&mut self) -> Result<(), Error> {
         assert!(self.distribution_addresses.len() >= 4);
 
+        InitCommand::ask("** CAUTION **\n");
+        self.ask_string("validator staking addresse is special, cannot be withdrawn in single node mode (anykey)","");
+        self.ask_string(
+            "these incentive wallets are special, cannot be withdrawn (anykey)",
+            "",
+        );
         self.genesis_dev.launch_incentive_from = RedeemAddress::from_str(&self.ask_string(
             format!("launch_incentive_from({})=", self.distribution_addresses[1]).as_str(),
             self.distribution_addresses[1].as_str(),
@@ -205,19 +219,22 @@ impl InitCommand {
         // app_hash,  app_state
         let result = GenesisCommand::do_generate(&self.genesis_dev).unwrap();
         self.app_hash = result.0;
-        self.app_state = result.1;
+        self.app_state = Some(result.1);
         Ok(())
     }
-    fn get_tendermint_filename(&self) -> String {
-        format!(
-            "{}/.tendermint/config/genesis.json",
-            dirs::home_dir().unwrap().to_str().unwrap()
-        )
-        .to_string()
+    pub fn get_tendermint_filename() -> String {
+        match std::env::var("TENDERMINT_HOME") {
+            Ok(path) => format!("{}/config/genesis.json", path).to_owned(),
+            Err(_) => format!(
+                "{}/.tendermint/config/genesis.json",
+                dirs::home_dir().unwrap().to_str().unwrap()
+            )
+            .to_owned(),
+        }
     }
     fn read_tendermint_genesis(&mut self) -> Result<(), Error> {
         // check whether file exists
-        fs::read_to_string(&self.get_tendermint_filename())
+        fs::read_to_string(&InitCommand::get_tendermint_filename())
             .and_then(|contents| {
                 println!("current tendermint genesis={}", contents);
                 let json: serde_json::Value = serde_json::from_str(&contents).unwrap();
@@ -228,8 +245,26 @@ impl InitCommand {
             })
             .map_err(|_e| format_err!("read tendermint genesis error"))
     }
+    fn write_overmind_procfile(&self) -> Result<(), Error> {
+        println!("write overmind Procfile");
+        let mut a = "".to_string();
+        a.push_str("enclave: ./tx-validation-app tcp://0.0.0.0:25933\n");
+        a.push_str(format!("abci: ./chain-abci --host 0.0.0.0 --port 26658 --chain_id {}  --genesis_app_hash {}     --enclave_server tcp://127.0.0.1:25933 \n", self.chainid,  self.app_hash).as_str());
+        a.push_str("tendermint: ./tendermint node\n");
+
+        File::create("./Procfile")
+            .map_err(|_| format_err!("Procfile Create Fail"))
+            .and_then(|mut file| {
+                file.write_all(a.as_bytes())
+                    .map(|_| ())
+                    .map_err(|_| format_err!("Procfile Write Fail"))
+            })
+    }
     fn write_tendermint_genesis(&self) -> Result<(), Error> {
-        println!("write genesis to {}", self.get_tendermint_filename());
+        println!(
+            "write genesis to {}",
+            InitCommand::get_tendermint_filename()
+        );
 
         let app_hash = self.app_hash.clone();
         let app_state = self.app_state.clone();
@@ -238,35 +273,36 @@ impl InitCommand {
             .genesis_time
             .to_rfc3339_opts(SecondsFormat::Micros, true);
         let mut json_string = String::from("");
-        fs::read_to_string(&self.get_tendermint_filename())
+        fs::read_to_string(&InitCommand::get_tendermint_filename())
             .and_then(|contents| {
                 let mut json: serde_json::Value = serde_json::from_str(&contents).unwrap();
                 let obj = json.as_object_mut().unwrap();
                 obj["app_hash"] = json!(app_hash);
                 obj.insert("app_state".to_string(), json!(""));
-                obj["app_state"] = serde_json::from_str(&app_state).unwrap();
+                obj["app_state"] = json!(&app_state.unwrap());
                 obj["genesis_time"] = json!(gt);
                 obj["chain_id"] = json!(self.chainid.clone());
-                json_string = serde_json::to_string_pretty(&json).unwrap();
+                json_string = serde_json::to_string(&json).unwrap();
                 println!("{}", json_string);
 
-                File::create(&self.get_tendermint_filename())
+                File::create(&InitCommand::get_tendermint_filename())
             })
             .map(|mut file| file.write_all(json_string.as_bytes()))
             .map(|_e| {
                 println!(
                     "writing tendermint genesis OK {}",
-                    self.get_tendermint_filename()
+                    InitCommand::get_tendermint_filename()
                 );
             })
             .map_err(|_e| format_err!("write tendermint genesis error"))
     }
+
     fn prepare_tendermint(&self) -> Result<(), Error> {
         // check whether file exists
-        fs::read_to_string(&self.get_tendermint_filename())
+        fs::read_to_string(&InitCommand::get_tendermint_filename())
             .or_else(|_e| {
                 // file not exist
-                Command::new("tendermint")
+                Command::new(&self.tendermint_command)
                     .args(&["init"])
                     .output()
                     .map(|_e| {
@@ -277,6 +313,18 @@ impl InitCommand {
             })
             .map(|_e| ())
     }
+
+    fn reset_tendermint(&self) -> Result<(), Error> {
+        // file not exist
+        Command::new(&self.tendermint_command)
+            .args(&["unsafe_reset_all"])
+            .output()
+            .map(|_e| {
+                println!("tenermint reset all");
+            })
+            .map_err(|_e| format_err!("tendermint not found"))
+    }
+
     fn read_staking_address(&mut self) -> Result<(), Error> {
         let storage = SledStorage::new(InitCommand::storage_path())?;
         let wallet_client = DefaultWalletClient::builder()
@@ -294,21 +342,59 @@ impl InitCommand {
         }
         success(&format!("Wallet created with name: {}", name));
 
+        // main validator staking
         let address = wallet_client.new_staking_address(&name.as_str(), &passphrase)?;
         success(&format!("New address: {}", address));
         self.staking_account_address = address.to_string().trim().to_string();
         println!("staking address={}", self.staking_account_address);
         assert!(address.to_string().trim().to_string().len() == 42);
+
+        for i in 0..6 {
+            let address = wallet_client.new_staking_address(&name.as_str(), &passphrase)?;
+            self.other_staking_accounts
+                .push(address.to_string().trim().to_string());
+            success(&format!("Other New address {}: {}", i + 1, address));
+        }
+
         Ok(())
     }
-    pub fn execute(&mut self) -> Result<(), Error> {
-        println!("initialize");
 
-        self.prepare_tendermint()
+    fn clear_disk(&self) -> Result<(), Error> {
+        InitCommand::ask("** DANGER **\n");
+
+        let first = self.ask_string(
+            "will remove all storages including wallets and blocks please type cleardisk=",
+            "",
+        );
+        let second = self.ask_string("please type cleardisk onemore=", "");
+        if first == "cleardisk" && second == "cleardisk" {
+            let _ = fs::canonicalize(PathBuf::from("./.cro-storage")).and_then(|p| {
+                let _ = fs::remove_dir_all(p);
+                Ok(())
+            });
+
+            let _ = fs::canonicalize(PathBuf::from("./.storage")).and_then(|p| {
+                let _ = fs::remove_dir_all(p);
+                Ok(())
+            });
+
+            Ok(())
+        } else {
+            Err(format_err!("clear disk error"))
+        }
+    }
+
+    pub fn execute(&mut self) -> Result<(), Error> {
+        println!("initialize chain");
+
+        self.clear_disk()
+            .and_then(|_| self.prepare_tendermint())
+            .and_then(|_| self.reset_tendermint())
             .and_then(|_| self.read_tendermint_genesis())
             .and_then(|_| self.read_information())
             .and_then(|_| self.generate_app_info())
             .and_then(|_| self.write_tendermint_genesis())
+            .and_then(|_| self.write_overmind_procfile())
             .map_err(|e| format_err!("init error={}", e))
     }
 

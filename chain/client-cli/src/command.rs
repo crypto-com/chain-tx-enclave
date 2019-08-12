@@ -15,7 +15,7 @@ use client_common::{Error, ErrorKind, Result, Storage};
 use client_core::signer::DefaultSigner;
 use client_core::transaction_builder::DefaultTransactionBuilder;
 use client_core::wallet::{DefaultWalletClient, WalletClient};
-use client_index::cipher::AbciTransactionCipher;
+use client_index::cipher::MockAbciTransactionObfuscation;
 use client_index::handler::{DefaultBlockHandler, DefaultTransactionHandler};
 use client_index::index::DefaultIndex;
 use client_index::synchronizer::ManualSynchronizer;
@@ -137,7 +137,8 @@ impl Command {
                 let tendermint_client = RpcClient::new(&tendermint_url());
                 let signer = DefaultSigner::new(storage.clone());
                 let fee_algorithm = tendermint_client.genesis()?.fee_policy();
-                let transaction_cipher = AbciTransactionCipher::new(tendermint_client.clone());
+                let transaction_cipher =
+                    MockAbciTransactionObfuscation::new(tendermint_client.clone());
                 let transaction_builder = DefaultTransactionBuilder::new(
                     signer.clone(),
                     fee_algorithm,
@@ -165,7 +166,8 @@ impl Command {
                 let tendermint_client = RpcClient::new(&tendermint_url());
                 let signer = DefaultSigner::new(storage.clone());
                 let fee_algorithm = tendermint_client.genesis()?.fee_policy();
-                let transaction_cipher = AbciTransactionCipher::new(tendermint_client.clone());
+                let transaction_cipher =
+                    MockAbciTransactionObfuscation::new(tendermint_client.clone());
                 let transaction_builder = DefaultTransactionBuilder::new(
                     signer.clone(),
                     fee_algorithm,
@@ -193,7 +195,8 @@ impl Command {
                 let tendermint_client = RpcClient::new(&tendermint_url());
 
                 let transaction_handler = DefaultTransactionHandler::new(storage.clone());
-                let transaction_cipher = AbciTransactionCipher::new(tendermint_client.clone());
+                let transaction_cipher =
+                    MockAbciTransactionObfuscation::new(tendermint_client.clone());
                 let block_handler = DefaultBlockHandler::new(
                     transaction_cipher,
                     transaction_handler,
@@ -216,7 +219,7 @@ impl Command {
         name: &str,
         address: &StakedStateAddress,
     ) -> Result<()> {
-        let passphrase = ask_passphrase()?;
+        let passphrase = ask_passphrase(None)?;
         let staked_state = network_ops_client.get_staked_state(name, &passphrase, address)?;
 
         let mut table = Table::new();
@@ -242,7 +245,7 @@ impl Command {
     }
 
     fn get_view_key<T: WalletClient>(wallet_client: T, name: &str) -> Result<()> {
-        let passphrase = ask_passphrase()?;
+        let passphrase = ask_passphrase(None)?;
         let view_key = wallet_client.view_key(name, &passphrase)?;
 
         success(&format!("View Key: {}", view_key));
@@ -250,7 +253,7 @@ impl Command {
     }
 
     fn get_balance<T: WalletClient>(wallet_client: T, name: &str) -> Result<()> {
-        let passphrase = ask_passphrase()?;
+        let passphrase = ask_passphrase(None)?;
         let balance = wallet_client.balance(name, &passphrase)?;
 
         success(&format!("Wallet balance: {}", balance));
@@ -258,7 +261,7 @@ impl Command {
     }
 
     fn get_history<T: WalletClient>(wallet_client: T, name: &str) -> Result<()> {
-        let passphrase = ask_passphrase()?;
+        let passphrase = ask_passphrase(None)?;
         let history = wallet_client.history(name, &passphrase)?;
 
         if !history.is_empty() {
@@ -303,7 +306,7 @@ impl Command {
         name: &str,
         force: bool,
     ) -> Result<()> {
-        let passphrase = ask_passphrase()?;
+        let passphrase = ask_passphrase(None)?;
 
         let view_key = wallet_client.view_key(name, &passphrase)?;
         let private_key = wallet_client

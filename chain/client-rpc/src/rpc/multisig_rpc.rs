@@ -113,9 +113,7 @@ where
             )
             .map_err(to_rpc_error)?;
 
-        extended_address
-            .to_cro()
-            .map_err(|err| rpc_error_from_string(format!("{}", err)))
+        Ok(extended_address.to_string())
     }
 
     fn new_session(

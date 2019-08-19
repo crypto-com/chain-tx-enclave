@@ -1,5 +1,6 @@
 use sgx_types::*;
 
+use chain_core::common::H256;
 use chain_core::init::coin::Coin;
 use chain_core::state::account::DepositBondTx;
 use chain_core::state::account::StakedState;
@@ -60,13 +61,17 @@ extern "C" {
 
 }
 
-pub fn check_initchain(eid: sgx_enclave_id_t, chain_hex_id: u8) -> Result<(), ()> {
+pub fn check_initchain(
+    eid: sgx_enclave_id_t,
+    chain_hex_id: u8,
+    last_app_hash: Option<H256>,
+) -> Result<(), Option<H256>> {
     let mut retval: sgx_status_t = sgx_status_t::SGX_SUCCESS;
     let result = unsafe { ecall_initchain(eid, &mut retval, chain_hex_id) };
     if retval == sgx_status_t::SGX_SUCCESS && result == retval {
         Ok(())
     } else {
-        Err(())
+        Err(last_app_hash)
     }
 }
 

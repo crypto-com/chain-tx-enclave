@@ -1,14 +1,14 @@
 mod enclave_u;
 
-use enclave_u_common::{storage_path, META_KEYSPACE, TX_KEYSPACE};
+use crate::enclave_u::check_initchain;
 use enclave_u_common::enclave_u::{init_enclave, QUERY_TOKEN_KEY};
+use enclave_u_common::{storage_path, META_KEYSPACE, TX_KEYSPACE};
 use log::{error, info};
 use sled::Db;
-use crate::enclave_u::check_initchain;
 
 fn main() {
     env_logger::init();
-    let db = Db::start_default(storage_path()).expect("failed to open a storage path");
+    let db = Db::open(storage_path()).expect("failed to open a storage path");
     let metadb = db
         .open_tree(META_KEYSPACE)
         .expect("failed to open a meta keyspace");
@@ -28,6 +28,4 @@ fn main() {
     };
     // FIXME: it's just a dummy now
     assert!(check_initchain(enclave.geteid(), 0xab).is_ok());
-
 }
-

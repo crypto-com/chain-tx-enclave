@@ -7,7 +7,7 @@ readme = "../../README.md"
 edition = "2018"
 
 [dependencies]
-sled = "0.24.1"
+sled = "0.25"
 log = "0.4.0"
 env_logger = "0.6.2"
 enclave-u-common = { path = "../../enclave-u-common" }

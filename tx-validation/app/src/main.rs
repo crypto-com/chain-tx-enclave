@@ -24,7 +24,7 @@ fn main() {
         error!("Please provide the ZMQ connection string (e.g. \"tcp://127.0.0.1:25933\") as the first argument");
         return;
     }
-    let db = Db::start_default(storage_path()).expect("failed to open a storage path");
+    let db = Db::open(storage_path()).expect("failed to open a storage path");
     let metadb = db
         .open_tree(META_KEYSPACE)
         .expect("failed to open a meta keyspace");

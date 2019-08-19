@@ -72,7 +72,7 @@ pub fn init_enclave(metadb: Arc<Tree>, debug: bool, token_key: &[u8]) -> SgxResu
 
     // Step 2: call sgx_create_enclave to initialize an enclave instance
     // Debug Support: set 2nd parameter to 1
-    let debug = if debug {1} else {0};
+    let debug = if debug { 1 } else { 0 };
     let mut misc_attr = sgx_misc_attribute_t {
         secs_attr: sgx_attributes_t { flags: 0, xfrm: 0 },
         misc_select: 0,
@@ -87,7 +87,7 @@ pub fn init_enclave(metadb: Arc<Tree>, debug: bool, token_key: &[u8]) -> SgxResu
 
     // Step 3: save the launch token if it is updated
     if (stored_token && launch_token_updated != 0) || !stored_token {
-        match metadb.set(token_key, launch_token.to_vec()) {
+        match metadb.insert(token_key, launch_token.to_vec()) {
             Ok(_) => {
                 info!("[+] Saved updated launch token!");
             }

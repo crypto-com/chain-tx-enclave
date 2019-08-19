@@ -87,6 +87,13 @@ impl TxValidationServer {
                             }
                         }
                     }
+                    Ok(EnclaveRequest::CommitBlock { app_hash }) => {
+                        if let Ok(_) = self.txdb.flush() {
+                            EnclaveResponse::CommitBlock(Ok(()))
+                        } else {
+                            EnclaveResponse::CommitBlock(Err(()))
+                        }
+                    }
                     Ok(EnclaveRequest::VerifyTx {
                         tx: tx @ TxAux::TransferTx { .. },
                         info,

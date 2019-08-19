@@ -6,8 +6,13 @@ description = "Requests and responses exchanges over ZMQ between chain-abci app 
 readme = "../README.md"
 edition = "2018"
 
+[features]
+default = ["mesalock_sgx"]
+mesalock_sgx = ["sgx_tstd"]
+
 [dependencies]
-chain-core = { path = "../chain-core" }
-chain-tx-validation = { path = "../chain-tx-validation" }
-parity-scale-codec = { version = "1.0", features = ["derive"] }
-secp256k1zkp = { git = "https://github.com/crypto-com/rust-secp256k1-zkp.git", rev = "29991f23eaaa55ec86491dc78e7455f8f1fe3212" }
+chain-core = { path = "../chain-core", default-features = false, features = ["mesalock_sgx"] }
+chain-tx-validation = { path = "../chain-tx-validation", default-features = false, features = ["mesalock_sgx"] }
+parity-scale-codec = { version = "1.0", default-features = false, features = ["derive"] }
+secp256k1zkp = { git = "https://github.com/crypto-com/rust-secp256k1-zkp.git", default-features = false, rev = "29991f23eaaa55ec86491dc78e7455f8f1fe3212", features = ["sgx"] }
+sgx_tstd = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk.git", optional = true }

@@ -20,7 +20,7 @@ fn main() {
         error!("Please provide the address:port to listen on (e.g. \"0.0.0.0:3443\") as the first argument");
         return;
     }
-    let db = Db::start_default(storage_path()).expect("failed to open a storage path");
+    let db = Db::open(storage_path()).expect("failed to open a storage path");
     let metadb = db
         .open_tree(META_KEYSPACE)
         .expect("failed to open a meta keyspace");

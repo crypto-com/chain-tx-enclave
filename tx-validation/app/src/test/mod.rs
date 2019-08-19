@@ -64,7 +64,7 @@ pub fn test_sealing() {
         .filter(None, LevelFilter::Debug)
         .write_style(WriteStyle::Always)
         .init();
-    let db = Db::start_default(".enclave-test").expect("failed to open a storage path");
+    let db = Db::open(".enclave-test").expect("failed to open a storage path");
     let metadb = db
         .open_tree(crate::META_KEYSPACE)
         .expect("failed to open a meta keyspace");

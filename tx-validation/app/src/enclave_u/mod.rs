@@ -108,7 +108,7 @@ pub fn check_transfertx(
         let fee = Fee::new(
             Coin::new(actual_fee_paid).expect("fee should not be larger than coin supply"),
         );
-        let _ = txdb.set(&txaux.tx_id(), sealed_log).map_err(|_| ())?;
+        let _ = txdb.insert(&txaux.tx_id(), sealed_log).map_err(|_| ())?;
         Ok((fee, None))
     } else {
         Err(())
@@ -208,7 +208,7 @@ pub fn check_withdraw_tx(
             Coin::new(actual_fee_paid).expect("fee should not be larger than coin supply"),
         );
         account.withdraw();
-        let _ = txdb.set(&txaux.tx_id(), sealed_log).map_err(|_| ())?;
+        let _ = txdb.insert(&txaux.tx_id(), sealed_log).map_err(|_| ())?;
         Ok((fee, Some(account)))
     } else {
         Err(())

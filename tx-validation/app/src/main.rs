@@ -3,9 +3,9 @@ mod server;
 #[cfg(feature = "sgx-test")]
 mod test;
 
-use enclave_u_common::{storage_path, META_KEYSPACE, TX_KEYSPACE};
-use enclave_u_common::enclave_u::{init_enclave, VALIDATION_TOKEN_KEY};
 use crate::server::TxValidationServer;
+use enclave_u_common::enclave_u::{init_enclave, VALIDATION_TOKEN_KEY};
+use enclave_u_common::{storage_path, META_KEYSPACE, TX_KEYSPACE};
 use log::{error, info};
 use sled::Db;
 use std::env;

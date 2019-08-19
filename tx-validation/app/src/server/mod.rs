@@ -62,12 +62,30 @@ impl TxValidationServer {
                 debug!("received a message");
                 let mcmd = EnclaveRequest::decode(&mut msg.as_slice());
                 let resp = match mcmd {
-                    Ok(EnclaveRequest::CheckChain { chain_hex_id }) => {
+                    Ok(EnclaveRequest::CheckChain {
+                        chain_hex_id,
+                        last_app_hash,
+                    }) => {
                         debug!("check chain");
-                        EnclaveResponse::CheckChain(check_initchain(
-                            self.enclave.geteid(),
-                            chain_hex_id,
-                        ))
+                        match self.txdb.get(b"last_apphash") {
+                            Err(_) => EnclaveResponse::CheckChain(Err(None)),
+                            Ok(s) => {
+                                let ss = s.map(|stored| {
+                                    let mut app_hash = [0u8; 32];
+                                    app_hash.copy_from_slice(&stored);
+                                    app_hash
+                                });
+                                if last_app_hash == ss {
+                                    EnclaveResponse::CheckChain(check_initchain(
+                                        self.enclave.geteid(),
+                                        chain_hex_id,
+                                        ss,
+                                    ))
+                                } else {
+                                    EnclaveResponse::CheckChain(Err(ss))
+                                }
+                            }
+                        }
                     }
                     Ok(EnclaveRequest::VerifyTx {
                         tx: tx @ TxAux::TransferTx { .. },

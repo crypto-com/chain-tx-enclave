@@ -1,4 +1,3 @@
-use enclave_u_common::enclave_u::{init_enclave, VALIDATION_TOKEN_KEY};
 use crate::enclave_u::{check_initchain, check_transfertx, check_withdraw_tx};
 use chain_core::common::MerkleTree;
 use chain_core::init::address::RedeemAddress;
@@ -25,6 +24,7 @@ use chain_core::tx::{
     TxAux,
 };
 use chain_core::ChainInfo;
+use enclave_u_common::enclave_u::{init_enclave, VALIDATION_TOKEN_KEY};
 use env_logger::{Builder, WriteStyle};
 use log::LevelFilter;
 use log::{debug, error, info};
@@ -82,7 +82,7 @@ pub fn test_sealing() {
             return;
         }
     };
-    assert!(check_initchain(enclave.geteid(), TEST_NETWORK_ID).is_ok());
+    assert!(check_initchain(enclave.geteid(), TEST_NETWORK_ID, None).is_ok());
 
     let secp = Secp256k1::new();
     let secret_key = SecretKey::from_slice(&[0xcd; 32]).expect("32 bytes, within curve order");

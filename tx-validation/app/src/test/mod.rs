@@ -1,4 +1,5 @@
 use crate::enclave_u::{check_initchain, check_transfertx, check_withdraw_tx};
+use crate::enclave_u::{get_token, store_token};
 use chain_core::common::MerkleTree;
 use chain_core::init::address::RedeemAddress;
 use chain_core::init::coin::Coin;
@@ -33,7 +34,6 @@ use secp256k1::{
     key::PublicKey, key::SecretKey, schnorrsig::schnorr_sign, Message, Secp256k1, Signing,
 };
 use sled::Db;
-use crate::enclave_u::{get_token, store_token};
 
 pub fn get_ecdsa_witness<C: Signing>(
     secp: &Secp256k1<C>,
@@ -78,7 +78,7 @@ pub fn test_sealing() {
         (Ok(r), new_token) => {
             info!("[+] Init Enclave Successful {}!", r.geteid());
             if let Some(launch_token) = new_token {
-                store_token(metadb, VALIDATION_TOKEN_KEY, launch_token);
+                store_token(metadb, VALIDATION_TOKEN_KEY, launch_token.to_vec());
             }
             r
         }

@@ -3,10 +3,10 @@ mod server;
 #[cfg(feature = "sgx-test")]
 mod test;
 
+use crate::enclave_u::{get_token, store_token};
 use crate::server::TxValidationServer;
 use enclave_u_common::enclave_u::{init_enclave, VALIDATION_TOKEN_KEY};
 use enclave_u_common::{storage_path, META_KEYSPACE, TX_KEYSPACE};
-use crate::enclave_u::{get_token, store_token};
 use log::{error, info};
 use sled::Db;
 use std::env;
@@ -37,7 +37,7 @@ fn main() {
         (Ok(r), new_token) => {
             info!("[+] Init Enclave Successful {}!", r.geteid());
             if let Some(launch_token) = new_token {
-                store_token(metadb, VALIDATION_TOKEN_KEY, launch_token);
+                let _ = store_token(metadb.clone(), VALIDATION_TOKEN_KEY, launch_token.to_vec());
             }
             r
         }
@@ -48,8 +48,8 @@ fn main() {
     };
 
     let child_t = thread::spawn(move || {
-        let mut server =
-            TxValidationServer::new(&args[1], enclave, txdb).expect("could not start a zmq server");
+        let mut server = TxValidationServer::new(&args[1], enclave, txdb, metadb)
+            .expect("could not start a zmq server");
         info!("starting zmq server");
         server.execute()
     });

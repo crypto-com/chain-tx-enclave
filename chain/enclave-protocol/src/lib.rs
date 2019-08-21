@@ -12,11 +12,7 @@
 extern crate sgx_tstd as std;
 
 use parity_scale_codec::{Decode, Encode, Error, Input, Output};
-<<<<<<< HEAD
-use std::prelude::v1::{Vec, Box};
-=======
 use std::prelude::v1::{Box, Vec};
->>>>>>> a5c25d619c2b7dba72c4dcfe11390e9664ec01c3
 
 use chain_core::common::{H256, H264, H512};
 use chain_core::state::account::DepositBondTx;

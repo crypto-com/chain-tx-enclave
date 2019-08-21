@@ -1,6 +1,9 @@
-use crate::enclave_u::{check_deposit_tx, check_initchain, check_transfertx, check_withdraw_tx};
+use crate::enclave_u::{
+    check_deposit_tx, check_initchain, check_transfertx, check_withdraw_tx, get_token_arr,
+    store_token,
+};
 use chain_core::state::account::DepositBondTx;
-use chain_core::tx::data::input::TxoPointer;
+use chain_core::tx::data::TxId;
 use chain_core::tx::TxAux;
 use enclave_protocol::{EnclaveRequest, EnclaveResponse, FLAGS};
 use log::{debug, info};
@@ -14,6 +17,7 @@ pub struct TxValidationServer {
     socket: Socket,
     enclave: SgxEnclave,
     txdb: Arc<Tree>,
+    metadb: Arc<Tree>,
 }
 
 impl TxValidationServer {
@@ -21,6 +25,7 @@ impl TxValidationServer {
         connection_str: &str,
         enclave: SgxEnclave,
         txdb: Arc<Tree>,
+        metadb: Arc<Tree>,
     ) -> Result<TxValidationServer, Error> {
         let ctx = Context::new();
         let socket = ctx.socket(REP)?;
@@ -29,13 +34,17 @@ impl TxValidationServer {
             socket,
             enclave,
             txdb,
+            metadb,
         })
     }
 
-    fn lookup_txids(&self, inputs: &[TxoPointer]) -> Option<Vec<Vec<u8>>> {
+    fn lookup_txids<I>(&self, inputs: I) -> Option<Vec<Vec<u8>>>
+    where
+        I: IntoIterator<Item = TxId> + ExactSizeIterator,
+    {
         let mut result = Vec::with_capacity(inputs.len());
-        for input in inputs.iter() {
-            if let Ok(Some(txin)) = self.txdb.get(input.id) {
+        for input in inputs.into_iter() {
+            if let Ok(Some(txin)) = self.txdb.get(input) {
                 result.push(txin.to_vec());
             } else {
                 return None;
@@ -46,11 +55,11 @@ impl TxValidationServer {
 
     fn lookup(&self, tx: &TxAux) -> Option<Vec<Vec<u8>>> {
         match tx {
-            TxAux::TransferTx { inputs, .. } => self.lookup_txids(inputs),
+            TxAux::TransferTx { inputs, .. } => self.lookup_txids(inputs.iter().map(|x| x.id)),
             TxAux::DepositStakeTx {
                 tx: DepositBondTx { inputs, .. },
                 ..
-            } => self.lookup_txids(inputs),
+            } => self.lookup_txids(inputs.iter().map(|x| x.id)),
             _ => None,
         }
     }
@@ -147,13 +156,32 @@ impl TxValidationServer {
                             self.txdb.clone(),
                         ))
                     }
+                    Ok(EnclaveRequest::GetCachedLaunchToken { enclave_metaname }) => {
+                        EnclaveResponse::GetCachedLaunchToken(get_token_arr(
+                            self.metadb.clone(),
+                            &enclave_metaname,
+                        ))
+                    }
+                    Ok(EnclaveRequest::UpdateCachedLaunchToken {
+                        enclave_metaname,
+                        token,
+                    }) => EnclaveResponse::UpdateCachedLaunchToken(store_token(
+                        self.metadb.clone(),
+                        &enclave_metaname,
+                        token.to_vec(),
+                    )),
+                    Ok(EnclaveRequest::GetSealedTxData { txids }) => {
+                        EnclaveResponse::GetSealedTxData(
+                            self.lookup_txids(txids.iter().map(|x| *x)),
+                        )
+                    }
                     Ok(_) => {
                         debug!("verify other tx");
                         EnclaveResponse::UnsupportedTxType
                     }
                     Err(e) => {
                         debug!("unknown request / failed to decode: {}", e);
-                        EnclaveResponse::UnsupportedTxType
+                        EnclaveResponse::UnknownRequest
                     }
                 };
                 let response = resp.encode();

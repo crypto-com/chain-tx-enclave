@@ -38,10 +38,10 @@ static ENCLAVE_FILE: &'static str = "enclave.signed.so";
 pub const VALIDATION_TOKEN_KEY: &[u8] = b"tx-validation-enclave.token";
 pub const QUERY_TOKEN_KEY: &[u8] = b"tx-query-enclave.token";
 
-const TOKEN_LEN: usize = 1024;
+pub const TOKEN_LEN: usize = 1024;
 
 /// returns the initialized enclave and the launch token (if it was created or updated)
-pub fn init_enclave(debug: bool, previous_token: Option<Vec<u8>>) -> (SgxResult<SgxEnclave>, Option<Vec<u8>>) {
+pub fn init_enclave(debug: bool, previous_token: Option<Vec<u8>>) -> (SgxResult<SgxEnclave>, Option<sgx_launch_token_t>) {
     let mut launch_token: sgx_launch_token_t = [0; TOKEN_LEN];
     let mut launch_token_updated: i32 = 0;
     // Step 1: try to retrieve the launch token saved by last transaction
@@ -86,7 +86,7 @@ pub fn init_enclave(debug: bool, previous_token: Option<Vec<u8>>) -> (SgxResult<
 
     // Step 3: save the launch token if it is updated
     if (stored_token && launch_token_updated != 0) || !stored_token {
-        (enclave, Some(launch_token.to_vec()))
+        (enclave, Some(launch_token))
     } else {
         (enclave, None)
     }

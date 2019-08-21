@@ -32,8 +32,6 @@ use sgx_types::*;
 use sgx_urts::SgxEnclave;
 
 use log::{info, warn};
-use sled::Tree;
-use std::sync::Arc;
 
 static ENCLAVE_FILE: &'static str = "enclave.signed.so";
 
@@ -42,15 +40,16 @@ pub const QUERY_TOKEN_KEY: &[u8] = b"tx-query-enclave.token";
 
 const TOKEN_LEN: usize = 1024;
 
-pub fn init_enclave(metadb: Arc<Tree>, debug: bool, token_key: &[u8]) -> SgxResult<SgxEnclave> {
+/// returns the initialized enclave and the launch token (if it was created or updated)
+pub fn init_enclave(debug: bool, previous_token: Option<Vec<u8>>) -> (SgxResult<SgxEnclave>, Option<Vec<u8>>) {
     let mut launch_token: sgx_launch_token_t = [0; TOKEN_LEN];
     let mut launch_token_updated: i32 = 0;
     // Step 1: try to retrieve the launch token saved by last transaction
     //         if there is no token, then create a new one.
     //
     // try to get the token saved in the key-value db */
-    let stored_token = match metadb.get(token_key) {
-        Ok(Some(token)) => {
+    let stored_token = match previous_token {
+        Some(token) => {
             info!("[+] Open token file success! ");
             if token.len() != TOKEN_LEN {
                 warn!(
@@ -83,19 +82,14 @@ pub fn init_enclave(metadb: Arc<Tree>, debug: bool, token_key: &[u8]) -> SgxResu
         &mut launch_token,
         &mut launch_token_updated,
         &mut misc_attr,
-    )?;
+    );
 
     // Step 3: save the launch token if it is updated
     if (stored_token && launch_token_updated != 0) || !stored_token {
-        match metadb.insert(token_key, launch_token.to_vec()) {
-            Ok(_) => {
-                info!("[+] Saved updated launch token!");
-            }
-            Err(_) => {
-                warn!("[-] Failed to save updated launch token!");
-            }
-        }
+        (enclave, Some(launch_token.to_vec()))
+    } else {
+        (enclave, None)
     }
 
-    Ok(enclave)
+    
 }

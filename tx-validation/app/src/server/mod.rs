@@ -88,6 +88,7 @@ impl TxValidationServer {
                         }
                     }
                     Ok(EnclaveRequest::CommitBlock { app_hash }) => {
+                        let _ = self.txdb.insert(b"last_apphash", &app_hash);
                         if let Ok(_) = self.txdb.flush() {
                             EnclaveResponse::CommitBlock(Ok(()))
                         } else {

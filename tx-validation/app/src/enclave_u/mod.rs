@@ -11,6 +11,7 @@ use parity_scale_codec::Encode;
 use sled::Tree;
 use std::mem::size_of;
 use std::sync::Arc;
+use log::{warn, info};
 
 extern "C" {
     fn ecall_initchain(
@@ -59,6 +60,24 @@ extern "C" {
         account_len: usize,
     ) -> sgx_status_t;
 
+}
+
+pub fn get_token(metadb: Arc<Tree>, token_key: &[u8]) -> Option<Vec<u8>> {
+    match metadb.get(token_key) {
+        Ok(x) => x.map(|tok| tok.to_vec()),
+        _ => None,
+    }
+}
+
+pub fn store_token(metadb: Arc<Tree>, token_key: &[u8], launch_token: Vec<u8>) {
+    match metadb.insert(token_key, launch_token) {
+        Ok(_) => {
+            info!("[+] Saved updated launch token!");
+        }
+        Err(_) => {
+            warn!("[-] Failed to save updated launch token!");
+        }
+    }
 }
 
 pub fn check_initchain(

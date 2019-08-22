@@ -286,8 +286,13 @@ pub mod tests {
             })
         }
 
-        fn broadcast_transaction(&self, _transaction: &[u8]) -> CommonResult<()> {
-            Ok(())
+        fn broadcast_transaction(&self, _transaction: &[u8]) -> CommonResult<BroadcastTxResult> {
+            Ok(BroadcastTxResult {
+                code: 0,
+                data: String::from(""),
+                hash: String::from(""),
+                log: String::from(""),
+            })
         }
     }
 
@@ -392,7 +397,10 @@ pub mod tests {
             })
         }
 
-        fn block_batch<T: Iterator<Item = u64>>(&self, _heights: T) -> CommonResult<Vec<Block>> {
+        fn block_batch<'a, T: Iterator<Item = &'a u64>>(
+            &self,
+            _heights: T,
+        ) -> CommonResult<Vec<Block>> {
             Ok(vec![Block {
                 block: BlockInner {
                     header: Header {
@@ -414,7 +422,7 @@ pub mod tests {
             })
         }
 
-        fn block_results_batch<T: Iterator<Item = u64>>(
+        fn block_results_batch<'a, T: Iterator<Item = &'a u64>>(
             &self,
             _heights: T,
         ) -> CommonResult<Vec<BlockResults>> {
@@ -427,7 +435,7 @@ pub mod tests {
             }])
         }
 
-        fn broadcast_transaction(&self, _transaction: &[u8]) -> CommonResult<()> {
+        fn broadcast_transaction(&self, _transaction: &[u8]) -> CommonResult<BroadcastTxResult> {
             unreachable!("broadcast_transaction")
         }
 

@@ -13,7 +13,7 @@ enclave-u-common = { path = "../../enclave-u-common" }
 sgx_types = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk" }
 sgx_urts = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk" }
 parity-scale-codec = { features = ["derive"], version = "1.0" }
-chain-core   = { git = "https://github.com/crypto-com/chain.git", rev = "a5c25d619c2b7dba72c4dcfe11390e9664ec01c3" }
-enclave-protocol   = { git = "https://github.com/crypto-com/chain.git", rev = "a5c25d619c2b7dba72c4dcfe11390e9664ec01c3" }
+chain-core   = { git = "https://github.com/crypto-com/chain.git", rev = "e2b1fd81e91a4d90311f765105c433dd15855410" }
+enclave-protocol   = { git = "https://github.com/crypto-com/chain.git", rev = "e2b1fd81e91a4d90311f765105c433dd15855410" }
 secp256k1zkp = { git = "https://github.com/crypto-com/rust-secp256k1-zkp.git", default-features = false, rev = "ac9843a361114b42178acc119ab77d5a149985f5", features = ["recovery", "endomorphism", "sgx"] }
 zmq = "0.9"

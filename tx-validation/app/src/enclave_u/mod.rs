@@ -7,6 +7,8 @@ use chain_core::state::account::StakedState;
 use chain_core::tx::fee::Fee;
 use chain_core::tx::TxAux;
 use chain_core::ChainInfo;
+use enclave_u_common::enclave_u::TOKEN_LEN;
+use log::{info, warn};
 use parity_scale_codec::Encode;
 use sled::Tree;
 use std::mem::size_of;
@@ -59,6 +61,40 @@ extern "C" {
         account_len: usize,
     ) -> sgx_status_t;
 
+}
+
+pub fn get_token(metadb: Arc<Tree>, token_key: &[u8]) -> Option<Vec<u8>> {
+    match metadb.get(token_key) {
+        Ok(x) => x.map(|tok| tok.to_vec()),
+        _ => None,
+    }
+}
+
+pub fn get_token_arr(
+    metadb: Arc<Tree>,
+    token_key: &[u8],
+) -> Result<Option<Box<[u8; TOKEN_LEN]>>, ()> {
+    match metadb.get(token_key) {
+        Ok(x) => Ok(x.map(|tok| {
+            let mut token = [0; TOKEN_LEN];
+            token.copy_from_slice(&tok);
+            Box::new(token)
+        })),
+        _ => Err(()),
+    }
+}
+
+pub fn store_token(metadb: Arc<Tree>, token_key: &[u8], launch_token: Vec<u8>) -> Result<(), ()> {
+    match metadb.insert(token_key, launch_token) {
+        Ok(_) => {
+            info!("[+] Saved updated launch token!");
+            Ok(())
+        }
+        Err(_) => {
+            warn!("[-] Failed to save updated launch token!");
+            Err(())
+        }
+    }
 }
 
 pub fn check_initchain(

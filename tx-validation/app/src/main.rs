@@ -3,6 +3,7 @@ mod server;
 #[cfg(feature = "sgx-test")]
 mod test;
 
+use crate::enclave_u::{get_token, store_token};
 use crate::server::TxValidationServer;
 use enclave_u_common::enclave_u::{init_enclave, VALIDATION_TOKEN_KEY};
 use enclave_u_common::{storage_path, META_KEYSPACE, TX_KEYSPACE};
@@ -31,21 +32,24 @@ fn main() {
     let txdb = db
         .open_tree(TX_KEYSPACE)
         .expect("failed to open a tx keyspace");
-
-    let enclave = match init_enclave(metadb, true, VALIDATION_TOKEN_KEY) {
-        Ok(r) => {
+    let token = get_token(metadb.clone(), VALIDATION_TOKEN_KEY);
+    let enclave = match init_enclave(true, token) {
+        (Ok(r), new_token) => {
             info!("[+] Init Enclave Successful {}!", r.geteid());
+            if let Some(launch_token) = new_token {
+                let _ = store_token(metadb.clone(), VALIDATION_TOKEN_KEY, launch_token.to_vec());
+            }
             r
         }
-        Err(x) => {
+        (Err(x), _) => {
             error!("[-] Init Enclave Failed {}!", x.as_str());
             return;
         }
     };
 
     let child_t = thread::spawn(move || {
-        let mut server =
-            TxValidationServer::new(&args[1], enclave, txdb).expect("could not start a zmq server");
+        let mut server = TxValidationServer::new(&args[1], enclave, txdb, metadb)
+            .expect("could not start a zmq server");
         info!("starting zmq server");
         server.execute()
     });

@@ -1,40 +1,42 @@
 use chain_core::tx::data::TxId;
-use enclave_u_common::{storage_path, TX_KEYSPACE};
+use enclave_protocol::{EnclaveRequest, EnclaveResponse, FLAGS};
 use log::{debug, error, trace};
 use parity_scale_codec::{Decode, Encode};
 use sgx_types::*;
-use sled::{ConfigBuilder, Db, Tree};
 use std::net::{SocketAddr, TcpStream};
 use std::os::unix::io::IntoRawFd;
-use std::sync::Arc;
+use std::sync::Once;
+use zmq::{Context, Socket, REQ};
 
-fn init_tx_db() -> Arc<Tree> {
-    let config = ConfigBuilder::default()
-        .path(storage_path())
-        .read_only(true);
+static ZMQ_CONNECTION_INIT: Once = Once::new();
 
-    let db = Db::start(config.build()).expect("failed to open a storage path");
-    db.open_tree(TX_KEYSPACE)
-        .expect("failed to open a tx keyspace")
+mod zmq_connection {
+    pub static mut CONNECTION_STR: String = String::new();
+}
+
+pub fn init_connection(connection_str: &str) {
+    unsafe {
+        ZMQ_CONNECTION_INIT.call_once(|| {
+            zmq_connection::CONNECTION_STR = connection_str.to_string();
+        })
+    }
+}
+
+fn get_connection_str() -> &'static str {
+    unsafe { &zmq_connection::CONNECTION_STR }
+}
+
+fn init_socket() -> Socket {
+    let ctx = Context::new();
+    let socket = ctx.socket(REQ).expect("failed to init zmq context");
+    socket
+        .connect(get_connection_str())
+        .expect("failed to connect to the tx validation enclave zmq");
+    socket
 }
 
 thread_local! {
-    static TXDB: Arc<Tree> = init_tx_db();
-}
-
-fn lookup_txids(txids: &[TxId]) -> Option<Vec<Vec<u8>>> {
-    let mut result = Vec::with_capacity(txids.len());
-    let r = TXDB.with(|txdb| {
-        for txid in txids.iter() {
-            if let Ok(Some(txin)) = txdb.get(txid) {
-                result.push(txin.to_vec());
-            } else {
-                return None;
-            }
-        }
-        return Some(result);
-    });
-    r
+    pub static ZMQ_SOCKET: Socket = init_socket();
 }
 
 #[no_mangle]
@@ -45,20 +47,47 @@ pub extern "C" fn ocall_get_txs(
     txs_len: u32,
 ) -> sgx_status_t {
     let mut txids_slice = unsafe { std::slice::from_raw_parts(txids, txids_len as usize) };
+    // TODO: directly construct EnclaveRequest in the enclave
     let txids_i: Result<Vec<TxId>, parity_scale_codec::Error> = Decode::decode(&mut txids_slice);
-    if let Ok(Some(txs_r)) = txids_i.map(|txids| lookup_txids(&txids)) {
-        let txs_enc = txs_r.encode();
-        if txs_enc.len() > (txs_len as usize) {
-            return sgx_status_t::SGX_ERROR_UNEXPECTED;
-        } else {
-            unsafe {
-                std::ptr::copy(txs_enc.as_ptr(), txs, txs_enc.len());
+    if let Ok(txids) = txids_i {
+        let request = EnclaveRequest::GetSealedTxData { txids };
+        let req = request.encode();
+        let r = ZMQ_SOCKET.with(|socket| {
+            let send_r = socket.send(req, FLAGS);
+            if send_r.is_err() {
+                error!("failed to send a request for obtaining sealed data");
+                return sgx_status_t::SGX_ERROR_UNEXPECTED;
             }
-        }
+            // TODO: pass back response directly
+            if let Ok(msg) = socket.recv_bytes(FLAGS) {
+                match EnclaveResponse::decode(&mut msg.as_slice()) {
+                    Ok(EnclaveResponse::GetSealedTxData(Some(data))) => {
+                        let txs_enc = data.encode();
+                        if txs_enc.len() > (txs_len as usize) {
+                            error!("Not enough allocated space to return the sealed tx data");
+                            return sgx_status_t::SGX_ERROR_UNEXPECTED;
+                        } else {
+                            unsafe {
+                                std::ptr::copy(txs_enc.as_ptr(), txs, txs_enc.len());
+                            }
+                            return sgx_status_t::SGX_SUCCESS;
+                        }
+                    }
+                    _ => {
+                        error!("failed to decode a response for obtaining sealed data");
+                        return sgx_status_t::SGX_ERROR_UNEXPECTED;
+                    }
+                }
+            } else {
+                error!("failed to receive a response for obtaining sealed data");
+                return sgx_status_t::SGX_ERROR_UNEXPECTED;
+            }
+        });
+        r
     } else {
+        error!("failed to decode transaction ids");
         return sgx_status_t::SGX_ERROR_UNEXPECTED;
     }
-    sgx_status_t::SGX_SUCCESS
 }
 
 extern "C" {

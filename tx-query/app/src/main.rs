@@ -2,6 +2,9 @@
 
 mod enclave_u;
 
+#[cfg(feature = "sgx-test")]
+mod test;
+
 use crate::enclave_u::{init_connection, ZMQ_SOCKET};
 use enclave_protocol::{EnclaveRequest, EnclaveResponse, FLAGS};
 use enclave_u::run_server;
@@ -9,6 +12,7 @@ use enclave_u_common::enclave_u::{init_enclave, QUERY_TOKEN_KEY};
 use log::{error, info, warn};
 use parity_scale_codec::{Decode, Encode};
 use sgx_types::sgx_status_t;
+use sgx_urts::SgxEnclave;
 use std::env;
 use std::net::TcpListener;
 use std::os::unix::io::AsRawFd;
@@ -16,16 +20,8 @@ use std::time::Duration;
 
 const TIMEOUT_SEC: u64 = 5;
 
-fn main() {
-    env_logger::init();
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 3 {
-        error!("Please provide the address:port to listen on (e.g. \"0.0.0.0:3443\") as the first argument and the ZMQ connection string (e.g. \"ipc://enclave.ipc\" or \"tcp://127.0.0.1:25933\") of the tx-validation server as the second");
-        return;
-    }
-    init_connection(&args[2]);
-
-    let enclave = ZMQ_SOCKET.with(|socket| {
+pub fn start_enclave() -> SgxEnclave {
+    ZMQ_SOCKET.with(|socket| {
         let q_token = QUERY_TOKEN_KEY.to_vec();
         let request = EnclaveRequest::GetCachedLaunchToken {
             enclave_metaname: q_token.clone(),
@@ -63,7 +59,25 @@ fn main() {
                 panic!("error in launch zmq response");
             }
         }
-    });
+    })
+}
+
+#[cfg(feature = "sgx-test")]
+fn main() {
+    test::test_integration();
+}
+
+#[cfg(not(feature = "sgx-test"))]
+fn main() {
+    env_logger::init();
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 3 {
+        error!("Please provide the address:port to listen on (e.g. \"0.0.0.0:3443\") as the first argument and the ZMQ connection string (e.g. \"ipc://enclave.ipc\" or \"tcp://127.0.0.1:25933\") of the tx-validation server as the second");
+        return;
+    }
+    init_connection(&args[2]);
+
+    let enclave = start_enclave();
 
     info!("Running TX Decryption Query server...");
     let listener = TcpListener::bind(&args[1]).expect("failed to bind the TCP socket");

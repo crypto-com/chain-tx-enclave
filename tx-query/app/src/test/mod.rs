@@ -95,24 +95,26 @@ pub fn test_integration() {
 
         let listener = TcpListener::bind("0.0.0.0:3443").expect("failed to bind the TCP socket");
 
-        match listener.accept() {
-            Ok((stream, addr)) => {
-                info!("new client: {:?}", addr);
-                let _ = stream.set_read_timeout(Some(time::Duration::new(TIMEOUT_SEC, 0)));
-                let _ = stream.set_write_timeout(Some(time::Duration::new(TIMEOUT_SEC, 0)));
-                let mut retval = sgx_status_t::SGX_SUCCESS;
-                let result =
-                    unsafe { run_server(enclave.geteid(), &mut retval, stream.as_raw_fd()) };
-                match result {
-                    sgx_status_t::SGX_SUCCESS => {
-                        info!("client query finished");
-                    }
-                    e => {
-                        error!("client query failed: {}", e);
+        for _ in 0..2 {
+            match listener.accept() {
+                Ok((stream, addr)) => {
+                    info!("new client: {:?}", addr);
+                    let _ = stream.set_read_timeout(Some(time::Duration::new(TIMEOUT_SEC, 0)));
+                    let _ = stream.set_write_timeout(Some(time::Duration::new(TIMEOUT_SEC, 0)));
+                    let mut retval = sgx_status_t::SGX_SUCCESS;
+                    let result =
+                        unsafe { run_server(enclave.geteid(), &mut retval, stream.as_raw_fd()) };
+                    match result {
+                        sgx_status_t::SGX_SUCCESS => {
+                            info!("client query finished");
+                        }
+                        e => {
+                            error!("client query failed: {}", e);
+                        }
                     }
                 }
+                Err(e) => info!("couldn't get client: {:?}", e),
             }
-            Err(e) => info!("couldn't get client: {:?}", e),
         }
     });
 
@@ -178,14 +180,23 @@ pub fn test_integration() {
         let c =
             DefaultTransactionObfuscation::new("localhost:3443".to_owned(), "localhost".to_owned());
         let txids = vec![*txid];
-        let r = c.decrypt(
+        let r1 = c.decrypt(
             txids.as_slice(),
             &PrivateKey::deserialize_from(&secret_key[..].to_vec()).expect("private key"),
         );
-        match r {
+        match r1 {
             Ok(v) => {
                 // TODO: check tx details
                 assert_eq!(v.len(), 1, "expected one TX");
+            }
+            _ => {
+                panic!("wrong decryption response");
+            }
+        }
+        let r2 = c.decrypt(txids.as_slice(), &PrivateKey::new().expect("random key"));
+        match r2 {
+            Ok(v) => {
+                assert_eq!(v.len(), 0, "expected no TX");
             }
             _ => {
                 panic!("wrong decryption response");

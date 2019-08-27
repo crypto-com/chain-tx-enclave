@@ -14,6 +14,7 @@ mod zmq_connection {
     pub static mut CONNECTION_STR: String = String::new();
 }
 
+/// To set the ZMQ connection string once on the startup
 pub fn init_connection(connection_str: &str) {
     unsafe {
         ZMQ_CONNECTION_INIT.call_once(|| {
@@ -39,6 +40,9 @@ thread_local! {
     pub static ZMQ_SOCKET: Socket = init_socket();
 }
 
+/// Untrusted function called from the enclave -- sends a ZMQ message to
+/// the transaction validation enclave that handles storage
+/// and passes back the reply
 #[no_mangle]
 pub extern "C" fn ocall_get_txs(
     txids: *const u8,
@@ -91,6 +95,7 @@ pub extern "C" fn ocall_get_txs(
 }
 
 extern "C" {
+    /// the enclave main function / routine (just gets raw file descriptor of the connection client TCP socket)
     pub fn run_server(
         eid: sgx_enclave_id_t,
         retval: *mut sgx_status_t,
@@ -98,6 +103,7 @@ extern "C" {
     ) -> sgx_status_t;
 }
 
+/// Untrusted function called from the enclave -- requests quote (initialization) from Intel SDK's AESM
 #[no_mangle]
 pub extern "C" fn ocall_sgx_init_quote(
     ret_ti: *mut sgx_target_info_t,
@@ -107,6 +113,7 @@ pub extern "C" fn ocall_sgx_init_quote(
     unsafe { sgx_init_quote(ret_ti, ret_gid) }
 }
 
+/// Untrusted function called from the enclave -- gets the IAS API key set as an environment variable
 #[no_mangle]
 pub extern "C" fn ocall_get_ias_key(ias_key: *mut u8, ias_key_len: u32) -> sgx_status_t {
     let ias_key_org = std::env::var("IAS_API_KEY").expect("IAS key not set");
@@ -121,7 +128,7 @@ pub extern "C" fn ocall_get_ias_key(ias_key: *mut u8, ias_key_len: u32) -> sgx_s
     sgx_status_t::SGX_SUCCESS
 }
 
-pub fn lookup_ipv4(host: &str, port: u16) -> SocketAddr {
+fn lookup_ipv4(host: &str, port: u16) -> SocketAddr {
     use std::net::ToSocketAddrs;
 
     let addrs = (host, port).to_socket_addrs().unwrap();
@@ -134,6 +141,7 @@ pub fn lookup_ipv4(host: &str, port: u16) -> SocketAddr {
     unreachable!("Cannot lookup address");
 }
 
+/// Untrusted function called from the enclave -- gets the TCP socket of Intel Attestation Service
 #[no_mangle]
 pub extern "C" fn ocall_get_ias_socket(ret_fd: *mut c_int) -> sgx_status_t {
     let port = 443;
@@ -157,7 +165,7 @@ fn decode_hex_digit(digit: char) -> u8 {
     }
 }
 
-pub fn get_spid() -> sgx_spid_t {
+fn get_spid() -> sgx_spid_t {
     let mut spid = sgx_spid_t::default();
     let spid_hex = std::env::var("SPID").expect("SPID not set");
     let hex = spid_hex.trim();
@@ -173,7 +181,7 @@ pub fn get_spid() -> sgx_spid_t {
     spid
 }
 
-pub fn decode_hex(hex: &str) -> Vec<u8> {
+fn decode_hex(hex: &str) -> Vec<u8> {
     let mut r: Vec<u8> = Vec::new();
     let mut chars = hex.chars().enumerate();
     loop {
@@ -193,6 +201,7 @@ pub fn decode_hex(hex: &str) -> Vec<u8> {
     r
 }
 
+/// Untrusted function called from the enclave -- requests quote (gets the payload) from Intel SDK's AESM
 #[no_mangle]
 pub extern "C" fn ocall_get_quote(
     p_sigrl: *const u8,
@@ -248,6 +257,7 @@ pub extern "C" fn ocall_get_quote(
     ret
 }
 
+/// Untrusted function called from the enclave -- checks the platform blob retrieved from IAS
 #[no_mangle]
 pub extern "C" fn ocall_get_update_info(
     platform_blob: *const sgx_platform_info_t,

@@ -2,7 +2,7 @@
   <img src="https://avatars0.githubusercontent.com/u/41934032?s=400&v=4" alt="Crypto.com Chain" width="400">
 </p>
 
-<h2 align="center">(Work in Progress) <a href="https://crypto.com">Crypto.com<a> Chain Transaction Enclaves</h2
+<h2 align="center">(Work in Progress) <a href="https://crypto.com">Crypto.com<a> Chain Transaction Enclaves</h2>
 
 For more details, see the [Crypto.com Chain README](https://github.com/crypto-com/chain)
 

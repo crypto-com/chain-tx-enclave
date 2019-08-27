@@ -12,17 +12,51 @@ use chrono::TimeZone;
 use chrono::Utc as TzUtc;
 use num_bigint::BigUint;
 use yasna::models::ObjectIdentifier;
+use zeroize::Zeroize;
 
 const CERTEXPIRYDAYS: i64 = 90i64;
 const ISSUER: &str = "Crypto.com Chain";
 const SUBJECT: &str = "TX Decryption Query";
 
+/// Wrapper around the DER private key payload
+/// TODO: pinning ? use secrecy crate?
+#[derive(Clone, Zeroize)]
+#[zeroize(drop)]
+pub struct PrivateKey(Vec<u8>);
+
+impl PrivateKey {
+    pub fn new(pk: Vec<u8>) -> Self {
+        PrivateKey(pk)
+    }
+
+    pub fn expose(&self) -> Vec<u8> {
+        self.0.clone()
+    }
+}
+
+/// Certificate and public key in the DER format
+#[derive(Clone)]
+pub struct CertKeyPair {
+    pub cert: Vec<u8>,
+    pub private_key: PrivateKey,
+}
+
+/// Generates the TLS cert + private key
+///
+/// # Arguments
+///
+/// * `payload` - The remote attestation payload that would be included in the certificate extension:
+/// format "<attestion report>|<IAS signature>|<IAS certificate>"
+/// * `prv_k` - private key, currently P-256 from Intel SGX SDK's crypto library
+/// * `pub_k` - corresponding public key, currently P-256 from Intel SGX SDK's crypto library
+/// * `ecc_handle` - auxiliary object for ECC operations from Intel SGX SDK's crypto library
+///
 pub fn gen_ecc_cert(
     payload: String,
     prv_k: &sgx_ec256_private_t,
     pub_k: &sgx_ec256_public_t,
     ecc_handle: &SgxEccHandle,
-) -> Result<(Vec<u8>, Vec<u8>), sgx_status_t> {
+) -> Result<CertKeyPair, sgx_status_t> {
     // Generate public key bytes since both DER will use it
     let mut pub_key_bytes: Vec<u8> = vec![4];
     let mut pk_gx = pub_k.gx.clone();
@@ -159,6 +193,7 @@ pub fn gen_ecc_cert(
                     let mut prv_k_r = prv_k.r.clone();
                     prv_k_r.reverse();
                     writer.next().write_bytes(&prv_k_r);
+                    prv_k_r.zeroize();
                     writer
                         .next()
                         .write_tagged(yasna::Tag::context(1), |writer| {
@@ -170,18 +205,8 @@ pub fn gen_ecc_cert(
         });
     });
 
-    Ok((key_der, cert_der))
-}
-
-pub fn percent_decode(orig: String) -> String {
-    let v: Vec<&str> = orig.split("%").collect();
-    let mut ret = String::new();
-    ret.push_str(v[0]);
-    if v.len() > 1 {
-        for s in v[1..].iter() {
-            ret.push(u8::from_str_radix(&s[0..2], 16).unwrap() as char);
-            ret.push_str(&s[2..]);
-        }
-    }
-    ret
+    Ok(CertKeyPair {
+        cert: cert_der,
+        private_key: PrivateKey(key_der),
+    })
 }

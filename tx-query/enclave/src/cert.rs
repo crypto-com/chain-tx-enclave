@@ -1,3 +1,8 @@
+//! # Certificate with RA payload generation
+//! portions of code adapted from https://github.com/mesalock-linux/mesatee (MesaTEE)
+//! Copyright (c) 2019, MesaTEE Authors (licensed under the Apache License, Version 2.0)
+//! Modifications Copyright (c) 2019, Foris Limited (licensed under the Apache License, Version 2.0)
+
 use std::prelude::v1::*;
 use std::str;
 use std::time::*;

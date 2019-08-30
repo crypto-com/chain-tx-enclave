@@ -92,12 +92,13 @@ fn unseal_all(mut sealed_logs: Vec<Vec<u8>>) -> Option<Vec<TxWithOutputs>> {
     Some(result)
 }
 
-/// FIXME: struct / typedef / fixed-size array for chain info
+/// FIXME: use bytestream (local socket) to read request and write response?
 #[no_mangle]
 pub extern "C" fn ecall_check_transfer_tx(
     actual_fee_paid: *mut u64,
     sealed_log: *mut u8,
     sealed_log_size: u32,
+    error_code: *mut i32,
     chain_info: *const u8,
     chain_info_len: usize,
     txaux: *const u8,
@@ -132,7 +133,11 @@ pub extern "C" fn ecall_check_transfer_tx(
                     return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
                 }
                 let result = verify_transfer(&tx, &witness, info, input_txs);
-                if result.is_err() {
+                if let Err(e) = result {
+                    let err: i32 = e as i32;
+                    unsafe {
+                        *error_code = err;
+                    }
                     return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
                 }
                 let to_seal = TxWithOutputs::Transfer(tx).encode();
@@ -165,10 +170,11 @@ pub extern "C" fn ecall_check_transfer_tx(
     }
 }
 
-/// FIXME: struct / typedef / fixed-size array for chain info
+/// FIXME: use bytestream (local socket) to read request and write response?
 #[no_mangle]
 pub extern "C" fn ecall_check_deposit_tx(
     input_coin_sum: *mut u64,
+    error_code: *mut i32,
     chain_info: *const u8,
     chain_info_len: usize,
     txaux: *const u8,
@@ -198,7 +204,11 @@ pub extern "C" fn ecall_check_deposit_tx(
         match (plaintx, inputs) {
             (Ok(PlainTxAux::DepositStakeTx(witness)), Ok(Some(input_txs))) => {
                 let result = verify_bonded_deposit_core(&tx, &witness, info, input_txs);
-                if result.is_err() {
+                if let Err(e) = result {
+                    let err: i32 = e as i32;
+                    unsafe {
+                        *error_code = err;
+                    }
                     return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
                 }
                 let incoins: u64 = result.unwrap().into();
@@ -216,12 +226,13 @@ pub extern "C" fn ecall_check_deposit_tx(
     }
 }
 
-/// FIXME: struct / typedef / fixed-size array for chain info and account?
+/// FIXME: use bytestream (local socket) to read request and write response?
 #[no_mangle]
 pub extern "C" fn ecall_check_withdraw_tx(
     actual_fee_paid: *mut u64,
     sealed_log: *mut u8,
     sealed_log_size: u32,
+    error_code: *mut i32,
     chain_info: *const u8,
     chain_info_len: usize,
     txaux: *const u8,
@@ -263,7 +274,11 @@ pub extern "C" fn ecall_check_withdraw_tx(
                     return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
                 }
                 let result = verify_unbonded_withdraw_core(&tx, info, &account);
-                if result.is_err() {
+                if let Err(e) = result {
+                    let err: i32 = e as i32;
+                    unsafe {
+                        *error_code = err;
+                    }
                     return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
                 }
                 let to_seal = TxWithOutputs::StakeWithdraw(tx).encode();

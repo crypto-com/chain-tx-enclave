@@ -119,7 +119,7 @@ impl TxValidationServer {
                                 self.txdb.clone(),
                             ))
                         } else {
-                            EnclaveResponse::VerifyTx(Err(()))
+                            EnclaveResponse::VerifyTx(Err(chain_tx_validation::Error::InvalidInput))
                         }
                     }
                     Ok(EnclaveRequest::VerifyTx {
@@ -138,7 +138,7 @@ impl TxValidationServer {
                                 self.txdb.clone(),
                             ))
                         } else {
-                            EnclaveResponse::VerifyTx(Err(()))
+                            EnclaveResponse::VerifyTx(Err(chain_tx_validation::Error::InvalidInput))
                         }
                     }
                     Ok(EnclaveRequest::VerifyTx {

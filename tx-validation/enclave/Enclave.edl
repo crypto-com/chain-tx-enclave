@@ -11,12 +11,14 @@ enclave {
         public sgx_status_t ecall_check_transfer_tx(
                 [out] uint64_t* actual_fee_paid,
                 [out, size=sealed_log_size] uint8_t* sealed_log, uint32_t sealed_log_size,
+                [out] int32_t* error_code,
                 [in, size=chain_info_len] const uint8_t* chain_info, size_t chain_info_len,
                 [in, size=txaux_len] const uint8_t* txaux, size_t txaux_len,
                 [in, size=txsin_len] const uint8_t* txsin, size_t txsin_len);
 
         public sgx_status_t ecall_check_deposit_tx(
                 [out] uint64_t* input_coin_sum,
+                [out] int32_t* error_code,
                 [in, size=chain_info_len] const uint8_t* chain_info, size_t chain_info_len,
                 [in, size=txaux_len] const uint8_t* txaux, size_t txaux_len,
                 [in, size=txsin_len] const uint8_t* txsin, size_t txsin_len);
@@ -24,6 +26,7 @@ enclave {
         public sgx_status_t ecall_check_withdraw_tx(
                 [out] uint64_t* actual_fee_paid,
                 [out, size=sealed_log_size] uint8_t* sealed_log, uint32_t sealed_log_size,
+                [out] int32_t* error_code,
                 [in, size=chain_info_len] const uint8_t* chain_info, size_t chain_info_len,
                 [in, size=txaux_len] const uint8_t* txaux, size_t txaux_len,
                 [in, size=account_len] const uint8_t* account, size_t account_len);

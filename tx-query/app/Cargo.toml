@@ -17,9 +17,9 @@ enclave-u-common = { path = "../../enclave-u-common" }
 sgx_types = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk" }
 sgx_urts = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk" }
 parity-scale-codec = { features = ["derive"], version = "1.0" }
-chain-core   = { git = "https://github.com/crypto-com/chain.git", rev = "61bf5834147afeb97f1089d26b5326a2f0fec348" }
-enclave-protocol   = { git = "https://github.com/crypto-com/chain.git", rev = "61bf5834147afeb97f1089d26b5326a2f0fec348" }
+chain-core   = { git = "https://github.com/crypto-com/chain.git", rev = "695b399178df882ac6777fbd3354eb29bd995ac1" }
+enclave-protocol   = { git = "https://github.com/crypto-com/chain.git", rev = "695b399178df882ac6777fbd3354eb29bd995ac1" }
 secp256k1zkp = { git = "https://github.com/crypto-com/rust-secp256k1-zkp.git", default-features = false, rev = "ac9843a361114b42178acc119ab77d5a149985f5", features = ["recovery", "endomorphism", "sgx"] }
 zmq = "0.9"
-client-index   = { git = "https://github.com/crypto-com/chain.git", rev = "61bf5834147afeb97f1089d26b5326a2f0fec348", optional = true }
-client-common   = { git = "https://github.com/crypto-com/chain.git", rev = "61bf5834147afeb97f1089d26b5326a2f0fec348", optional = true }
+client-index   = { git = "https://github.com/crypto-com/chain.git", rev = "695b399178df882ac6777fbd3354eb29bd995ac1", optional = true }
+client-common   = { git = "https://github.com/crypto-com/chain.git", rev = "695b399178df882ac6777fbd3354eb29bd995ac1", optional = true }

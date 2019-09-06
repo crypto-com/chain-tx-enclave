@@ -7,6 +7,7 @@ ARG NETWORK_ID
 ENV SGX_MODE=${SGX_MODE}
 ENV NETWORK_ID=${NETWORK_ID}
 ENV APP_PORT=25933
+ENV TX_ENCLAVE_STORAGE=/enclave-storage
 
 RUN echo 'source /opt/sgxsdk/environment' >> /root/.docker_bashrc && \
     echo 'source /root/.cargo/env' >> /root/.docker_bashrc

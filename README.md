@@ -22,6 +22,12 @@ $ docker build -t chain-tx-validation \
 -f ./tx-validation/Dockerfile . \
 --build-arg SGX_MODE=<SW|HW> \
 --build-arg NETWORK_ID=<NETWORK_HEX_ID>
+
+# Example
+$ docker build -t chain-tx-validation \
+-f ./tx-validation/Dockerfile . \
+--build-arg SGX_MODE=SW \
+--build-arg NETWORK_ID=AB
 ```
 
 ### Run the Docker instance
@@ -31,6 +37,8 @@ $ docker build -t chain-tx-validation \
 # docker run --rm -p <HOST_PORT>:<DOCKER_APP_PORT> -rm chain-tx
 $ docker run --rm \
 -p 25933:25933 \
+--env RUST_BACKTRACE=1 \
+--env RUST_LOG=info \
 chain-tx-validation
 ```
 
@@ -40,8 +48,26 @@ chain-tx-validation
 $ docker run --rm \
 --device /dev/isgx \
 -p 25933:25933 \
+--env RUST_BACKTRACE=1 \
+--env RUST_LOG=info \
 chain-tx-validation
 ```
+
+#### Bind enclave storage to local storage
+
+Encalve contains its own state stored inside Docker instance, if you are restarting the Docker, you may experience sanity check error because by default the docker storage is cleared on teardown.
+
+To solve the problem, consider binding your host storage to the `/enclave-storage` of the instance by:
+```bash
+$ docker run --rm \
+-p 25933:25933 \
+--env RUST_BACKTRACE=1 \
+--env RUST_LOG=info \
+-v /User/crypto-com/enclave-storage:/enclave-storage \
+chain-tx-validation
+```
+
+Replace `/User/crypto-com/enclave-storage` with your desired host path. Note that host storage path must be an absolute path.
 
 ### Run /bin/bash inside Docker instance
 
@@ -50,15 +76,4 @@ If you want to get your hands dirty, you can
 $ docker run --rm \
 chain-tx-validation \
 /bin/bash
-```
-
-## Build from Source Code
-
-```bash
-$ export SGX_MODE=<SW|HW>
-$ export NETWORK_ID=<NETWORK_HEX_ID>
-$ cd ./tx-validation
-$ make
-$ cd ./bin
-$ ./tx-validator-app tcp://0.0.0.0:25933
 ```

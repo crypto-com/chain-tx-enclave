@@ -15,12 +15,12 @@ mesalock_sgx = ["sgx_tstd"]
 digest = { version = "0.8", default-features = false}
 tiny-keccak = { version = "1.5.0", default-features = false, features = ["keccak"] }
 hex = { git = "https://github.com/mesalock-linux/rust-hex-sgx.git", rev = "c603c9f6cd929073d5d07171dce9f7cc8524a956" }
-secp256k1zkp = { git = "https://github.com/crypto-com/rust-secp256k1-zkp.git", default-features = false, rev = "ac9843a361114b42178acc119ab77d5a149985f5", features = ["recovery", "endomorphism", "sgx"] }
+secp256k1zkp = { git = "https://github.com/crypto-com/rust-secp256k1-zkp.git", default-features = false, rev = "d78ae81a598a5ceead03aa1ddf04067f6340f223", features = ["recovery", "endomorphism", "sgx"] }
 serde = { version = "1.0", features = ["derive"], optional = true }
 blake2 = { version = "0.8", default-features = false }
 parity-scale-codec = { features = ["derive"], default-features = false, version = "1.0" }
 base64 = { git = "https://github.com/mesalock-linux/rust-base64-sgx.git", rev = "c2fabd15f647f7b4ad1e003b8d742ea34951dad2" }
-sgx_tstd = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk.git", optional = true }
+sgx_tstd = { rev = "v1.0.9", git = "https://github.com/baidu/rust-sgx-sdk.git", optional = true }
 static_assertions = { version = "0.3.4", default-features = false}
 bech32 = { version = "0.7.1", optional = true }
 

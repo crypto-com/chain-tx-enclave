@@ -1,4 +1,4 @@
-FROM baiduxlab/sgx-rust:1804-1.0.8
+FROM baiduxlab/sgx-rust:1804-1.0.9
 LABEL maintainer="Crypto.com"
 
 ARG SGX_MODE=SW

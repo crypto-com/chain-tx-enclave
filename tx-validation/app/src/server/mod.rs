@@ -10,22 +10,21 @@ use log::{debug, info};
 use parity_scale_codec::{Decode, Encode};
 use sgx_urts::SgxEnclave;
 use sled::Tree;
-use std::sync::Arc;
 use zmq::{Context, Error, Socket, REP};
 
 pub struct TxValidationServer {
     socket: Socket,
     enclave: SgxEnclave,
-    txdb: Arc<Tree>,
-    metadb: Arc<Tree>,
+    txdb: Tree,
+    metadb: Tree,
 }
 
 impl TxValidationServer {
     pub fn new(
         connection_str: &str,
         enclave: SgxEnclave,
-        txdb: Arc<Tree>,
-        metadb: Arc<Tree>,
+        txdb: Tree,
+        metadb: Tree,
     ) -> Result<TxValidationServer, Error> {
         let ctx = Context::new();
         let socket = ctx.socket(REP)?;
@@ -116,7 +115,7 @@ impl TxValidationServer {
                                 tx,
                                 txins,
                                 info,
-                                self.txdb.clone(),
+                                &mut self.txdb,
                             ))
                         } else {
                             EnclaveResponse::VerifyTx(Err(chain_tx_validation::Error::InvalidInput))
@@ -135,7 +134,6 @@ impl TxValidationServer {
                                 txins,
                                 account,
                                 info,
-                                self.txdb.clone(),
                             ))
                         } else {
                             EnclaveResponse::VerifyTx(Err(chain_tx_validation::Error::InvalidInput))
@@ -153,12 +151,12 @@ impl TxValidationServer {
                             tx,
                             account,
                             info,
-                            self.txdb.clone(),
+                            &mut self.txdb,
                         ))
                     }
                     Ok(EnclaveRequest::GetCachedLaunchToken { enclave_metaname }) => {
                         EnclaveResponse::GetCachedLaunchToken(get_token_arr(
-                            self.metadb.clone(),
+                            &self.metadb,
                             &enclave_metaname,
                         ))
                     }
@@ -166,7 +164,7 @@ impl TxValidationServer {
                         enclave_metaname,
                         token,
                     }) => EnclaveResponse::UpdateCachedLaunchToken(store_token(
-                        self.metadb.clone(),
+                        &mut self.metadb,
                         &enclave_metaname,
                         token.to_vec(),
                     )),

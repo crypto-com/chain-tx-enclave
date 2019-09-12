@@ -73,10 +73,7 @@ pub fn get_token(metadb: &Tree, token_key: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
-pub fn get_token_arr(
-    metadb: &Tree,
-    token_key: &[u8],
-) -> Result<Option<Box<[u8; TOKEN_LEN]>>, ()> {
+pub fn get_token_arr(metadb: &Tree, token_key: &[u8]) -> Result<Option<Box<[u8; TOKEN_LEN]>>, ()> {
     match metadb.get(token_key) {
         Ok(x) => Ok(x.map(|tok| {
             let mut token = [0; TOKEN_LEN];

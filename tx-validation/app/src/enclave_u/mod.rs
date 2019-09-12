@@ -13,7 +13,6 @@ use log::{info, warn};
 use parity_scale_codec::Encode;
 use sled::Tree;
 use std::mem::size_of;
-use std::sync::Arc;
 
 extern "C" {
     fn ecall_initchain(
@@ -67,17 +66,14 @@ extern "C" {
 
 }
 
-pub fn get_token(metadb: Arc<Tree>, token_key: &[u8]) -> Option<Vec<u8>> {
+pub fn get_token(metadb: &Tree, token_key: &[u8]) -> Option<Vec<u8>> {
     match metadb.get(token_key) {
         Ok(x) => x.map(|tok| tok.to_vec()),
         _ => None,
     }
 }
 
-pub fn get_token_arr(
-    metadb: Arc<Tree>,
-    token_key: &[u8],
-) -> Result<Option<Box<[u8; TOKEN_LEN]>>, ()> {
+pub fn get_token_arr(metadb: &Tree, token_key: &[u8]) -> Result<Option<Box<[u8; TOKEN_LEN]>>, ()> {
     match metadb.get(token_key) {
         Ok(x) => Ok(x.map(|tok| {
             let mut token = [0; TOKEN_LEN];
@@ -88,7 +84,7 @@ pub fn get_token_arr(
     }
 }
 
-pub fn store_token(metadb: Arc<Tree>, token_key: &[u8], launch_token: Vec<u8>) -> Result<(), ()> {
+pub fn store_token(metadb: &mut Tree, token_key: &[u8], launch_token: Vec<u8>) -> Result<(), ()> {
     match metadb.insert(token_key, launch_token) {
         Ok(_) => {
             info!("[+] Saved updated launch token!");
@@ -120,7 +116,7 @@ pub fn check_transfertx(
     txaux: TxAux,
     txins: Vec<Vec<u8>>,
     info: ChainInfo,
-    txdb: Arc<Tree>,
+    txdb: &mut Tree,
 ) -> Result<(Fee, Option<StakedState>), Error> {
     let txins_enc: Vec<u8> = txins.encode();
     let txaux_enc: Vec<u8> = txaux.encode();
@@ -165,7 +161,6 @@ pub fn check_deposit_tx(
     txins: Vec<Vec<u8>>,
     maccount: Option<StakedState>,
     info: ChainInfo,
-    _txdb: Arc<Tree>,
 ) -> Result<(Fee, Option<StakedState>), Error> {
     let txins_enc: Vec<u8> = txins.encode();
     let txaux_enc: Vec<u8> = txaux.encode();
@@ -225,7 +220,7 @@ pub fn check_withdraw_tx(
     txaux: TxAux,
     mut account: StakedState,
     info: ChainInfo,
-    txdb: Arc<Tree>,
+    txdb: &mut Tree,
 ) -> Result<(Fee, Option<StakedState>), Error> {
     let account_enc: Vec<u8> = account.encode();
     let txaux_enc: Vec<u8> = txaux.encode();

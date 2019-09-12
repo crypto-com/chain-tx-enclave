@@ -1,6 +1,6 @@
 [package]
 name = "tx-query-enclave"
-version = "0.0.1"
+version = "0.0.3"
 authors = ["Crypto.com <chain@crypto.com>"]
 description = "The transaction query enclave."
 readme = "../../README.md"
@@ -14,17 +14,17 @@ crate-type = ["staticlib"]
 default = []
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies]
-sgx_types   = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk.git" }
-sgx_tstd    = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk.git", features = ["net"] }
-sgx_tcrypto = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk.git" }
-sgx_tse     = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk.git" }
-sgx_rand    = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk.git" }
-sgx_tseal     = { rev = "v1.0.8", git = "https://github.com/baidu/rust-sgx-sdk" }
+sgx_types   = { rev = "v1.0.9", git = "https://github.com/baidu/rust-sgx-sdk.git" }
+sgx_tstd    = { rev = "v1.0.9", git = "https://github.com/baidu/rust-sgx-sdk.git", features = ["net"] }
+sgx_tcrypto = { rev = "v1.0.9", git = "https://github.com/baidu/rust-sgx-sdk.git" }
+sgx_tse     = { rev = "v1.0.9", git = "https://github.com/baidu/rust-sgx-sdk.git" }
+sgx_rand    = { rev = "v1.0.9", git = "https://github.com/baidu/rust-sgx-sdk.git" }
+sgx_tseal     = { rev = "v1.0.9", git = "https://github.com/baidu/rust-sgx-sdk" }
 parity-scale-codec = { default-features = false, features = ["derive"], version = "1.0" }
 chain-core   = { path = "../../chain/chain-core", default-features = false, features = ["mesalock_sgx"] }
 enclave-protocol   = { path = "../../chain/enclave-protocol", default-features = false, features = ["mesalock_sgx"] }
 
-secp256k1zkp = { git = "https://github.com/crypto-com/rust-secp256k1-zkp.git", default-features = false, rev = "ac9843a361114b42178acc119ab77d5a149985f5", features = ["recovery", "endomorphism", "sgx"] }
+secp256k1zkp = { git = "https://github.com/crypto-com/rust-secp256k1-zkp.git", default-features = false, rev = "d78ae81a598a5ceead03aa1ddf04067f6340f223", features = ["recovery", "endomorphism", "sgx"] }
 
 [dependencies]
 chrono      = { git = "https://github.com/mesalock-linux/chrono-sgx" }

@@ -72,19 +72,19 @@ pub fn test_sealing() {
         .write_style(WriteStyle::Always)
         .init();
     let mut db = Db::open(".enclave-test").expect("failed to open a storage path");
-    let metadb = db
+    let mut metadb = db
         .open_tree(crate::META_KEYSPACE)
         .expect("failed to open a meta keyspace");
-    let txdb = db
+    let mut txdb = db
         .open_tree(crate::TX_KEYSPACE)
         .expect("failed to open a tx keyspace");
 
-    let token = get_token(metadb.clone(), VALIDATION_TOKEN_KEY);
+    let token = get_token(&metadb, VALIDATION_TOKEN_KEY);
     let enclave = match init_enclave(true, token) {
         (Ok(r), new_token) => {
             info!("[+] Init Enclave Successful {}!", r.geteid());
             if let Some(launch_token) = new_token {
-                store_token(metadb, VALIDATION_TOKEN_KEY, launch_token.to_vec());
+                store_token(&mut metadb, VALIDATION_TOKEN_KEY, launch_token.to_vec());
             }
             r
         }
@@ -140,7 +140,7 @@ pub fn test_sealing() {
             assert!(false, "new tx already in db");
         }
     };
-    let r = check_withdraw_tx(enclave.geteid(), withdrawtx, account, info, txdb.clone());
+    let r = check_withdraw_tx(enclave.geteid(), withdrawtx, account, info, &mut txdb);
     assert!(r.is_ok());
     let ta = txdb.get(&txid);
     let sealedtx = match ta {
@@ -195,7 +195,7 @@ pub fn test_sealing() {
         transfertx,
         vec![sealedtx.clone()],
         info,
-        txdb.clone(),
+        &mut txdb,
     );
     assert!(r2.is_ok());
     let td = txdb.get(&txid1);
@@ -237,7 +237,7 @@ pub fn test_sealing() {
         transfertx2,
         vec![sealedtx],
         info,
-        txdb.clone(),
+        &mut txdb,
     );
     match r3 {
         Err(Error::ZeroCoin) => {

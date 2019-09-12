@@ -26,18 +26,18 @@ fn main() {
         return;
     }
     let db = Db::open(storage_path()).expect("failed to open a storage path");
-    let metadb = db
+    let mut metadb = db
         .open_tree(META_KEYSPACE)
         .expect("failed to open a meta keyspace");
     let txdb = db
         .open_tree(TX_KEYSPACE)
         .expect("failed to open a tx keyspace");
-    let token = get_token(metadb.clone(), VALIDATION_TOKEN_KEY);
+    let token = get_token(&metadb, VALIDATION_TOKEN_KEY);
     let enclave = match init_enclave(true, token) {
         (Ok(r), new_token) => {
             info!("[+] Init Enclave Successful {}!", r.geteid());
             if let Some(launch_token) = new_token {
-                let _ = store_token(metadb.clone(), VALIDATION_TOKEN_KEY, launch_token.to_vec());
+                let _ = store_token(&mut metadb, VALIDATION_TOKEN_KEY, launch_token.to_vec());
             }
             r
         }

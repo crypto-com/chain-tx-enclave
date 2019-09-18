@@ -1,6 +1,6 @@
 [package]
 name = "chain-core"
-version = "0.0.3"
+version = "0.1.0"
 authors = ["Crypto.com <chain@crypto.com>"]
 description = "Library with core types and serialization for the use in external tools"
 readme = "../README.md"
@@ -14,8 +14,8 @@ mesalock_sgx = ["sgx_tstd"]
 [dependencies]
 digest = { version = "0.8", default-features = false}
 tiny-keccak = { version = "1.5.0", default-features = false, features = ["keccak"] }
-hex = { version = "0.3", optional = true }
-secp256k1zkp = { git = "https://github.com/crypto-com/rust-secp256k1-zkp.git", rev = "d78ae81a598a5ceead03aa1ddf04067f6340f223", default-features = false, features = ["recovery", "endomorphism", "sgx"] }
+hex = { version = "0.4", optional = true }
+secp256k1zkp = { git = "https://github.com/crypto-com/rust-secp256k1-zkp.git", default-features = false, rev = "d78ae81a598a5ceead03aa1ddf04067f6340f223", features = ["recovery", "endomorphism", "sgx"] }
 serde = { version = "1.0", features = ["derive"], optional = true }
 blake2 = { version = "0.8", default-features = false }
 parity-scale-codec = { features = ["derive"], default-features = false, version = "1.0" }

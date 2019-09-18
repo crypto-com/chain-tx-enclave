@@ -29,8 +29,8 @@ use chain_core::tx::{
 };
 use chain_core::ChainInfo;
 use client_common::PrivateKey;
-use client_index::cipher::DefaultTransactionObfuscation;
-use client_index::cipher::TransactionObfuscation;
+use client_core::cipher::DefaultTransactionObfuscation;
+use client_core::cipher::TransactionObfuscation;
 use enclave_protocol::FLAGS;
 use enclave_protocol::{EnclaveRequest, EnclaveResponse};
 use enclave_u_common::enclave_u::{init_enclave, VALIDATION_TOKEN_KEY};

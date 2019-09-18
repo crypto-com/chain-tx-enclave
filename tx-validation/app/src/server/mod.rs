@@ -5,7 +5,7 @@ use crate::enclave_u::{
 use chain_core::state::account::DepositBondTx;
 use chain_core::tx::data::TxId;
 use chain_core::tx::TxAux;
-use enclave_protocol::{EnclaveRequest, EnclaveResponse, FLAGS};
+use enclave_protocol::{EnclaveRequest, EnclaveResponse, VerifyTxRequest, FLAGS};
 use log::{debug, info};
 use parity_scale_codec::{Decode, Encode};
 use sgx_urts::SgxEnclave;
@@ -103,56 +103,44 @@ impl TxValidationServer {
                             EnclaveResponse::CommitBlock(Err(()))
                         }
                     }
-                    Ok(EnclaveRequest::VerifyTx {
-                        tx: tx @ TxAux::TransferTx { .. },
-                        info,
-                        ..
-                    }) => {
-                        debug!("verify transfer tx");
-                        if let Some(txins) = self.lookup(&tx) {
-                            EnclaveResponse::VerifyTx(check_transfertx(
-                                self.enclave.geteid(),
-                                tx,
-                                txins,
-                                info,
-                                &mut self.txdb,
-                            ))
-                        } else {
-                            EnclaveResponse::VerifyTx(Err(chain_tx_validation::Error::InvalidInput))
+                    Ok(EnclaveRequest::VerifyTx(req)) => {
+                        let mtxins = self.lookup(&req.tx);
+                        // FIXME: simplify / move to enclave
+                        match (&req.tx, mtxins, req.account) {
+                            (TxAux::TransferTx { .. }, Some(txins), _) => {
+                                debug!("verify transfer tx");
+                                EnclaveResponse::VerifyTx(check_transfertx(
+                                    self.enclave.geteid(),
+                                    req.tx,
+                                    txins,
+                                    req.info,
+                                    &mut self.txdb,
+                                ))
+                            }
+                            (TxAux::DepositStakeTx { .. }, Some(txins), account) => {
+                                debug!("verify deposit tx");
+                                EnclaveResponse::VerifyTx(check_deposit_tx(
+                                    self.enclave.geteid(),
+                                    req.tx,
+                                    txins,
+                                    account,
+                                    req.info,
+                                ))
+                            }
+                            (TxAux::WithdrawUnbondedStakeTx { .. }, _, Some(account)) => {
+                                debug!("verify withdraw tx");
+                                EnclaveResponse::VerifyTx(check_withdraw_tx(
+                                    self.enclave.geteid(),
+                                    req.tx,
+                                    account,
+                                    req.info,
+                                    &mut self.txdb,
+                                ))
+                            }
+                            _ => EnclaveResponse::VerifyTx(Err(
+                                chain_tx_validation::Error::InvalidInput,
+                            )),
                         }
-                    }
-                    Ok(EnclaveRequest::VerifyTx {
-                        tx: tx @ TxAux::DepositStakeTx { .. },
-                        info,
-                        account,
-                    }) => {
-                        debug!("verify deposit tx");
-                        if let Some(txins) = self.lookup(&tx) {
-                            EnclaveResponse::VerifyTx(check_deposit_tx(
-                                self.enclave.geteid(),
-                                tx,
-                                txins,
-                                account,
-                                info,
-                            ))
-                        } else {
-                            EnclaveResponse::VerifyTx(Err(chain_tx_validation::Error::InvalidInput))
-                        }
-                    }
-                    Ok(EnclaveRequest::VerifyTx {
-                        tx: tx @ TxAux::WithdrawUnbondedStakeTx { .. },
-                        info,
-                        account: Some(account),
-                        ..
-                    }) => {
-                        debug!("verify withdraw tx");
-                        EnclaveResponse::VerifyTx(check_withdraw_tx(
-                            self.enclave.geteid(),
-                            tx,
-                            account,
-                            info,
-                            &mut self.txdb,
-                        ))
                     }
                     Ok(EnclaveRequest::GetCachedLaunchToken { enclave_metaname }) => {
                         EnclaveResponse::GetCachedLaunchToken(get_token_arr(

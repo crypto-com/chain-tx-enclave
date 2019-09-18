@@ -8,9 +8,11 @@ use chain_core::tx::data::Tx;
 use chain_core::tx::fee::FeeAlgorithm;
 use chain_core::tx::{TransactionId, TxAux};
 use client_common::{ErrorKind, Result, ResultExt, SignedTransaction};
-use client_index::TransactionObfuscation;
 
-use crate::{SelectedUnspentTransactions, Signer, TransactionBuilder, UnspentTransactions};
+use crate::{
+    SelectedUnspentTransactions, Signer, TransactionBuilder, TransactionObfuscation,
+    UnspentTransactions,
+};
 
 /// Default implementation of `TransactionBuilder`
 ///
@@ -206,10 +208,7 @@ mod tests {
         let passphrase = &SecUtf8::from("passphrase");
 
         let storage = MemoryStorage::default();
-        let wallet_client = DefaultWalletClient::builder()
-            .with_wallet(storage.clone())
-            .build()
-            .unwrap();
+        let wallet_client = DefaultWalletClient::new_read_only(storage.clone());
 
         wallet_client.new_wallet(name, passphrase).unwrap();
 
@@ -349,10 +348,7 @@ mod tests {
         let passphrase = &SecUtf8::from("passphrase");
 
         let storage = MemoryStorage::default();
-        let wallet_client = DefaultWalletClient::builder()
-            .with_wallet(storage.clone())
-            .build()
-            .unwrap();
+        let wallet_client = DefaultWalletClient::new_read_only(storage.clone());
 
         wallet_client.new_wallet(name, passphrase).unwrap();
 

@@ -8,16 +8,18 @@
 #[macro_use]
 extern crate sgx_tstd as std;
 
-use chain_core::state::account::StakedState;
+use chain_core::init::coin::Coin;
+use chain_core::tx::data::TxId;
+use chain_core::tx::fee::Fee;
 use chain_core::tx::TransactionId;
 use chain_core::tx::{data::input::TxoIndex, PlainTxAux, TxAux, TxObfuscated};
 use chain_tx_validation::witness::verify_tx_recover_address;
 use chain_tx_validation::{
-    verify_bonded_deposit_core, verify_transfer, verify_unbonded_withdraw_core, ChainInfo,
-    TxWithOutputs,
+    verify_bonded_deposit_core, verify_transfer, verify_unbonded_withdraw_core, TxWithOutputs,
 };
 use enclave_macro::get_network_id;
-use parity_scale_codec::{Decode, Encode, Error};
+use enclave_protocol::{IntraEnclaveRequest, IntraEnclaveResponse, IntraEnclaveResponseOk};
+use parity_scale_codec::{Decode, Encode};
 use sgx_tseal::SgxSealedData;
 use sgx_types::{sgx_sealed_data_t, sgx_status_t};
 use std::prelude::v1::Vec;
@@ -32,18 +34,6 @@ pub extern "C" fn ecall_initchain(chain_hex_id: u8) -> sgx_status_t {
         sgx_status_t::SGX_SUCCESS
     } else {
         sgx_status_t::SGX_ERROR_INVALID_PARAMETER
-    }
-}
-
-#[inline]
-fn check_chain_info(chain_info: *const u8, chain_info_len: usize) -> Option<ChainInfo> {
-    let mut chain_info_slice = unsafe { slice::from_raw_parts(chain_info, chain_info_len) };
-    let chain_info = ChainInfo::decode(&mut chain_info_slice);
-    match chain_info {
-        Ok(ChainInfo { chain_hex_id, .. }) if chain_hex_id == NETWORK_HEX_ID => {
-            Some(chain_info.unwrap())
-        }
-        _ => None,
     }
 }
 
@@ -92,221 +82,182 @@ fn unseal_all(mut sealed_logs: Vec<Vec<u8>>) -> Option<Vec<TxWithOutputs>> {
     Some(result)
 }
 
-/// FIXME: use bytestream (local socket) to read request and write response?
-#[no_mangle]
-pub extern "C" fn ecall_check_transfer_tx(
-    actual_fee_paid: *mut u64,
-    sealed_log: *mut u8,
-    sealed_log_size: u32,
-    error_code: *mut i32,
-    chain_info: *const u8,
-    chain_info_len: usize,
-    txaux: *const u8,
-    txaux_len: usize,
-    txsin: *const u8,
-    txsin_len: usize,
-) -> sgx_status_t {
-    let info = match check_chain_info(chain_info, chain_info_len) {
-        None => {
-            return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
-        }
-        Some(x) => x,
-    };
+#[inline]
+fn construct_sealed_response(
+    result: Result<Fee, chain_tx_validation::Error>,
+    txid: &TxId,
+    to_seal_tx: TxWithOutputs,
+) -> Result<IntraEnclaveResponse, sgx_status_t> {
+    let to_seal = to_seal_tx.encode();
+    match result {
+        Err(e) => Ok(Err(e)),
+        Ok(fee) => {
+            let sealing_result = SgxSealedData::<[u8]>::seal_data(txid, &to_seal);
+            let sealed_data = match sealing_result {
+                Ok(x) => x,
+                Err(ret) => {
+                    return Err(ret);
+                }
+            };
+            let sealed_log_size = SgxSealedData::<[u8]>::calc_raw_sealed_data_size(
+                sealed_data.get_add_mac_txt_len(),
+                sealed_data.get_encrypt_txt_len(),
+            ) as usize;
+            let mut sealed_log: Vec<u8> = vec![0u8; sealed_log_size];
 
-    let mut txaux_slice = unsafe { slice::from_raw_parts(txaux, txaux_len) };
-    let txaux = TxAux::decode(&mut txaux_slice);
-    if let Ok(TxAux::TransferTx {
-        txid,
-        payload: TxObfuscated { txpayload, .. },
-        no_of_outputs,
-        ..
-    }) = txaux
-    {
-        let mut inputs_slice = unsafe { slice::from_raw_parts(txsin, txsin_len) };
-        let inputs_enc: Result<Vec<Vec<u8>>, Error> = Decode::decode(&mut inputs_slice);
-        let inputs = inputs_enc.map(unseal_all);
-        // FIXME: decrypting
-        let plaintx = PlainTxAux::decode(&mut txpayload.as_slice());
-        match (plaintx, inputs) {
-            (Ok(PlainTxAux::TransferTx(tx, witness)), Ok(Some(input_txs))) => {
-                if tx.id() != txid || tx.outputs.len() as TxoIndex != no_of_outputs {
-                    return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
+            unsafe {
+                let sealed_r = sealed_data.to_raw_sealed_data_t(
+                    sealed_log.as_mut_ptr() as *mut sgx_sealed_data_t,
+                    sealed_log_size as u32,
+                );
+                if sealed_r.is_none() {
+                    return Err(sgx_status_t::SGX_ERROR_INVALID_PARAMETER);
                 }
-                let result = verify_transfer(&tx, &witness, info, input_txs);
-                if let Err(e) = result {
-                    let err: i32 = e as i32;
-                    unsafe {
-                        *error_code = err;
-                    }
-                    return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
-                }
-                let to_seal = TxWithOutputs::Transfer(tx).encode();
-                let sealing_result = SgxSealedData::<[u8]>::seal_data(&txid, &to_seal);
-                let sealed_data = match sealing_result {
-                    Ok(x) => x,
-                    Err(ret) => {
-                        return ret;
-                    }
-                };
-                let actual_fee: u64 = result.unwrap().to_coin().into();
-                unsafe {
-                    let sealed_r = sealed_data.to_raw_sealed_data_t(
-                        sealed_log as *mut sgx_sealed_data_t,
-                        sealed_log_size,
-                    );
-                    if sealed_r.is_none() {
-                        return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
-                    }
-                    *actual_fee_paid = actual_fee;
-                }
-                sgx_status_t::SGX_SUCCESS
             }
-            _ => {
-                return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
-            }
+            Ok(Ok(IntraEnclaveResponseOk::TxWithOutputs {
+                paid_fee: fee,
+                sealed_tx: sealed_log,
+            }))
         }
-    } else {
-        sgx_status_t::SGX_ERROR_INVALID_PARAMETER
     }
 }
 
-/// FIXME: use bytestream (local socket) to read request and write response?
-#[no_mangle]
-pub extern "C" fn ecall_check_deposit_tx(
-    input_coin_sum: *mut u64,
-    error_code: *mut i32,
-    chain_info: *const u8,
-    chain_info_len: usize,
-    txaux: *const u8,
-    txaux_len: usize,
-    txsin: *const u8,
-    txsin_len: usize,
-) -> sgx_status_t {
-    let info = match check_chain_info(chain_info, chain_info_len) {
-        None => {
-            return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
-        }
-        Some(x) => x,
-    };
-
-    let mut txaux_slice = unsafe { slice::from_raw_parts(txaux, txaux_len) };
-    let txaux = TxAux::decode(&mut txaux_slice);
-    if let Ok(TxAux::DepositStakeTx {
-        tx,
-        payload: TxObfuscated { txpayload, .. },
-    }) = txaux
-    {
-        let mut inputs_slice = unsafe { slice::from_raw_parts(txsin, txsin_len) };
-        let inputs_enc: Result<Vec<Vec<u8>>, Error> = Decode::decode(&mut inputs_slice);
-        let inputs = inputs_enc.map(unseal_all);
-        // FIXME: decrypting
-        let plaintx = PlainTxAux::decode(&mut txpayload.as_slice());
-        match (plaintx, inputs) {
-            (Ok(PlainTxAux::DepositStakeTx(witness)), Ok(Some(input_txs))) => {
-                let result = verify_bonded_deposit_core(&tx, &witness, info, input_txs);
-                if let Err(e) = result {
-                    let err: i32 = e as i32;
-                    unsafe {
-                        *error_code = err;
-                    }
-                    return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
-                }
-                let incoins: u64 = result.unwrap().into();
-                unsafe {
-                    *input_coin_sum = incoins;
-                }
-                sgx_status_t::SGX_SUCCESS
-            }
-            _ => {
-                return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
-            }
-        }
-    } else {
-        sgx_status_t::SGX_ERROR_INVALID_PARAMETER
+#[inline]
+fn construct_simple_response(
+    result: Result<Coin, chain_tx_validation::Error>,
+) -> Result<IntraEnclaveResponse, sgx_status_t> {
+    match result {
+        Err(e) => Ok(Err(e)),
+        Ok(input_coins) => Ok(Ok(IntraEnclaveResponseOk::DepositStakeTx { input_coins })),
     }
 }
 
-/// FIXME: use bytestream (local socket) to read request and write response?
-#[no_mangle]
-pub extern "C" fn ecall_check_withdraw_tx(
-    actual_fee_paid: *mut u64,
-    sealed_log: *mut u8,
-    sealed_log_size: u32,
-    error_code: *mut i32,
-    chain_info: *const u8,
-    chain_info_len: usize,
-    txaux: *const u8,
-    txaux_len: usize,
-    account: *const u8,
-    account_len: usize,
+#[inline]
+fn write_back_response(
+    response: Result<IntraEnclaveResponse, sgx_status_t>,
+    response_buf: *mut u8,
+    max_response_len: u32,
 ) -> sgx_status_t {
-    let info = match check_chain_info(chain_info, chain_info_len) {
-        None => {
-            return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
-        }
-        Some(x) => x,
-    };
-
-    let mut txaux_slice = unsafe { slice::from_raw_parts(txaux, txaux_len) };
-    let txaux = TxAux::decode(&mut txaux_slice);
-    if let Ok(TxAux::WithdrawUnbondedStakeTx {
-        txid,
-        no_of_outputs,
-        payload: TxObfuscated { txpayload, .. },
-        witness,
-        ..
-    }) = txaux
-    {
-        let address = verify_tx_recover_address(&witness, &txid);
-        if address.is_err() {
-            return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
-        }
-        // FIXME: decrypting
-        let mut account_slice = unsafe { slice::from_raw_parts(account, account_len) };
-        let account = StakedState::decode(&mut account_slice);
-        let plaintx = PlainTxAux::decode(&mut txpayload.as_slice());
-        match (plaintx, account) {
-            (Ok(PlainTxAux::WithdrawUnbondedStakeTx(tx)), Ok(account)) => {
-                if tx.id() != txid
-                    || no_of_outputs != tx.outputs.len() as TxoIndex
-                    || account.address != address.unwrap()
-                {
-                    return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
-                }
-                let result = verify_unbonded_withdraw_core(&tx, info, &account);
-                if let Err(e) = result {
-                    let err: i32 = e as i32;
-                    unsafe {
-                        *error_code = err;
-                    }
-                    return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
-                }
-                let to_seal = TxWithOutputs::StakeWithdraw(tx).encode();
-                let sealing_result = SgxSealedData::<[u8]>::seal_data(&txid, &to_seal);
-                let sealed_data = match sealing_result {
-                    Ok(x) => x,
-                    Err(ret) => {
-                        return ret;
-                    }
-                };
-                let actual_fee: u64 = result.unwrap().to_coin().into();
+    match response {
+        Ok(r) => {
+            let to_copy = r.encode();
+            let resp_len = to_copy.len() as u32;
+            if resp_len > 0 && resp_len <= max_response_len {
                 unsafe {
-                    let sealed_r = sealed_data.to_raw_sealed_data_t(
-                        sealed_log as *mut sgx_sealed_data_t,
-                        sealed_log_size,
-                    );
-                    if sealed_r.is_none() {
-                        return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
-                    }
-                    *actual_fee_paid = actual_fee;
+                    std::ptr::copy_nonoverlapping(to_copy.as_ptr(), response_buf, to_copy.len());
                 }
                 sgx_status_t::SGX_SUCCESS
+            } else {
+                sgx_status_t::SGX_ERROR_INVALID_PARAMETER
             }
-            _ => {
+        }
+        Err(e) => e,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ecall_check_tx(
+    tx_request: *const u8,
+    tx_request_len: usize,
+    response_buf: *mut u8,
+    response_len: u32,
+) -> sgx_status_t {
+    let mut tx_request_slice = unsafe { slice::from_raw_parts(tx_request, tx_request_len) };
+    if let Ok(req) = IntraEnclaveRequest::decode(&mut tx_request_slice) {
+        if req.is_basic_valid(NETWORK_HEX_ID).is_err() {
+            return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
+        }
+        match (req.tx_inputs, req.request.tx) {
+            (
+                Some(sealed_inputs),
+                TxAux::TransferTx {
+                    txid,
+                    payload: TxObfuscated { txpayload, .. },
+                    no_of_outputs,
+                    ..
+                },
+            ) => {
+                // FIXME: decrypting
+                let plaintx = PlainTxAux::decode(&mut txpayload.as_slice());
+                let unsealed_inputs = unseal_all(sealed_inputs);
+                match (plaintx, unsealed_inputs) {
+                    (Ok(PlainTxAux::TransferTx(tx, witness)), Some(inputs)) => {
+                        if tx.id() != txid || tx.outputs.len() as TxoIndex != no_of_outputs {
+                            return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
+                        }
+                        let result = verify_transfer(&tx, &witness, req.request.info, inputs);
+                        let response =
+                            construct_sealed_response(result, &txid, TxWithOutputs::Transfer(tx));
+                        write_back_response(response, response_buf, response_len)
+                    }
+                    _ => {
+                        return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
+                    }
+                }
+            }
+            (
+                Some(sealed_inputs),
+                TxAux::DepositStakeTx {
+                    tx,
+                    payload: TxObfuscated { txpayload, .. },
+                },
+            ) => {
+                // FIXME: decrypting
+                let plaintx = PlainTxAux::decode(&mut txpayload.as_slice());
+                let inputs = unseal_all(sealed_inputs);
+                match (plaintx, inputs) {
+                    (Ok(PlainTxAux::DepositStakeTx(witness)), Some(inputs)) => {
+                        let result =
+                            verify_bonded_deposit_core(&tx, &witness, req.request.info, inputs);
+                        let response = construct_simple_response(result);
+                        write_back_response(response, response_buf, response_len)
+                    }
+                    _ => {
+                        return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
+                    }
+                }
+            }
+            (
+                None,
+                TxAux::WithdrawUnbondedStakeTx {
+                    txid,
+                    no_of_outputs,
+                    payload: TxObfuscated { txpayload, .. },
+                    witness,
+                },
+            ) => {
+                let address = verify_tx_recover_address(&witness, &txid);
+                if address.is_err() {
+                    return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
+                }
+                // FIXME: decrypting
+                let plaintx = PlainTxAux::decode(&mut txpayload.as_slice());
+                match (plaintx, req.request.account) {
+                    (Ok(PlainTxAux::WithdrawUnbondedStakeTx(tx)), Some(account)) => {
+                        if tx.id() != txid
+                            || no_of_outputs != tx.outputs.len() as TxoIndex
+                            || account.address != address.unwrap()
+                        {
+                            return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
+                        }
+                        let result = verify_unbonded_withdraw_core(&tx, req.request.info, &account);
+                        let response = construct_sealed_response(
+                            result,
+                            &txid,
+                            TxWithOutputs::StakeWithdraw(tx),
+                        );
+                        write_back_response(response, response_buf, response_len)
+                    }
+                    _ => {
+                        return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
+                    }
+                }
+            }
+            (_, _) => {
                 return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
             }
         }
     } else {
-        sgx_status_t::SGX_ERROR_INVALID_PARAMETER
+        return sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
     }
 }

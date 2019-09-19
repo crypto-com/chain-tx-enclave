@@ -26,3 +26,4 @@ chain-tx-validation   = { path = "../../chain/chain-tx-validation", default-feat
 chain-core   = { path = "../../chain/chain-core", default-features = false, features = ["mesalock_sgx"] }
 secp256k1zkp = { git = "https://github.com/crypto-com/rust-secp256k1-zkp.git", default-features = false, rev = "d78ae81a598a5ceead03aa1ddf04067f6340f223", features = ["recovery", "endomorphism", "sgx"] }
 parity-scale-codec = { default-features = false, version = "1.0" }
+enclave-protocol   = { path = "../../chain/enclave-protocol", default-features = false, features = ["mesalock_sgx"] }

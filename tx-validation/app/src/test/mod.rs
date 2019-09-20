@@ -1,4 +1,4 @@
-use crate::enclave_u::{check_initchain, check_transfertx, check_withdraw_tx};
+use crate::enclave_u::{check_initchain, check_tx};
 use crate::enclave_u::{get_token, store_token};
 use chain_core::common::MerkleTree;
 use chain_core::init::address::RedeemAddress;
@@ -26,6 +26,7 @@ use chain_core::tx::{
 };
 use chain_core::ChainInfo;
 use chain_tx_validation::Error;
+use enclave_protocol::{IntraEnclaveRequest, VerifyTxRequest};
 use enclave_u_common::enclave_u::{init_enclave, VALIDATION_TOKEN_KEY};
 use env_logger::{Builder, WriteStyle};
 use log::LevelFilter;
@@ -140,7 +141,15 @@ pub fn test_sealing() {
             assert!(false, "new tx already in db");
         }
     };
-    let r = check_withdraw_tx(enclave.geteid(), withdrawtx, account, info, &mut txdb);
+    let mut request0 = IntraEnclaveRequest {
+        request: VerifyTxRequest {
+            tx: withdrawtx,
+            account: Some(account),
+            info,
+        },
+        tx_inputs: None,
+    };
+    let r = check_tx(enclave.geteid(), request0, &mut txdb);
     assert!(r.is_ok());
     let ta = txdb.get(&txid);
     let sealedtx = match ta {
@@ -190,13 +199,17 @@ pub fn test_sealing() {
             assert!(false, "new 2nd tx already in db");
         }
     };
-    let r2 = check_transfertx(
-        enclave.geteid(),
-        transfertx,
-        vec![sealedtx.clone()],
-        info,
-        &mut txdb,
-    );
+
+    let mut request1 = IntraEnclaveRequest {
+        request: VerifyTxRequest {
+            tx: transfertx,
+            account: None,
+            info,
+        },
+        tx_inputs: Some(vec![sealedtx.clone()]),
+    };
+
+    let r2 = check_tx(enclave.geteid(), request1, &mut txdb);
     assert!(r2.is_ok());
     let td = txdb.get(&txid1);
     match td {
@@ -232,13 +245,16 @@ pub fn test_sealing() {
             txpayload: plain_txaux2.encode(),
         },
     };
-    let r3 = check_transfertx(
-        enclave.geteid(),
-        transfertx2,
-        vec![sealedtx],
-        info,
-        &mut txdb,
-    );
+    let mut request2 = IntraEnclaveRequest {
+        request: VerifyTxRequest {
+            tx: transfertx2,
+            account: None,
+            info,
+        },
+        tx_inputs: Some(vec![sealedtx]),
+    };
+
+    let r3 = check_tx(enclave.geteid(), request2, &mut txdb);
     match r3 {
         Err(Error::ZeroCoin) => {
             debug!("invalid transaction rejected and error code returned");

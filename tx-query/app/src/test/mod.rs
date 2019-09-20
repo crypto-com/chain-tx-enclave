@@ -156,11 +156,7 @@ pub fn test_integration() {
 
     ZMQ_SOCKET.with(|socket| {
         info!("sending a TX request");
-        let request = EnclaveRequest::VerifyTx {
-            tx: withdrawtx,
-            account: Some(account),
-            info,
-        };
+        let request = EnclaveRequest::new_tx_request(withdrawtx, Some(account), info);
         let req = request.encode();
         socket.send(req, FLAGS).expect("request sending failed");
         let msg = socket

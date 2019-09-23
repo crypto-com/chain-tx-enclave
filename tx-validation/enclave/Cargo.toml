@@ -22,8 +22,10 @@ sgx_types     = { rev = "v1.0.9", git = "https://github.com/baidu/rust-sgx-sdk" 
 sgx_tseal     = { rev = "v1.0.9", git = "https://github.com/baidu/rust-sgx-sdk" }
 sgx_tcrypto   = { rev = "v1.0.9", git = "https://github.com/baidu/rust-sgx-sdk" }
 enclave-macro = { path = "../../enclave-macro" }
-chain-tx-validation   = {  git = "https://github.com/crypto-com/chain.git", rev = "317e73b179bd7fd7f269a7ba090be565665b59f0", default-features = false, features = ["mesalock_sgx"] }
-chain-core   = {  git = "https://github.com/crypto-com/chain.git", rev = "317e73b179bd7fd7f269a7ba090be565665b59f0", default-features = false, features = ["mesalock_sgx"] }
+chain-tx-validation   = {  git = "https://github.com/crypto-com/chain.git", rev = "ebe0567161c96fc231a5a066943861cc99699416", default-features = false, features = ["mesalock_sgx"] }
+chain-core   = {  git = "https://github.com/crypto-com/chain.git", rev = "ebe0567161c96fc231a5a066943861cc99699416", default-features = false, features = ["mesalock_sgx"] }
 secp256k1zkp = { git = "https://github.com/crypto-com/rust-secp256k1-zkp.git", default-features = false, rev = "d78ae81a598a5ceead03aa1ddf04067f6340f223", features = ["recovery", "endomorphism", "sgx"] }
 parity-scale-codec = { default-features = false, version = "1.0" }
-enclave-protocol   = { git = "https://github.com/crypto-com/chain.git", rev = "317e73b179bd7fd7f269a7ba090be565665b59f0", default-features = false, features = ["mesalock_sgx"] }
+enclave-protocol   = { git = "https://github.com/crypto-com/chain.git", rev = "ebe0567161c96fc231a5a066943861cc99699416", default-features = false, features = ["mesalock_sgx"] }
+chain-tx-filter   = { git = "https://github.com/crypto-com/chain.git", rev = "ebe0567161c96fc231a5a066943861cc99699416", default-features = false, features = ["mesalock_sgx"] }
+lazy_static  = { version = "1.4", features = ["spin_no_std"] }

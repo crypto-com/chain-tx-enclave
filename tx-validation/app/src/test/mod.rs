@@ -141,12 +141,12 @@ pub fn test_sealing() {
             assert!(false, "new tx already in db");
         }
     };
-    let mut request0 = IntraEnclaveRequest {
-        request: VerifyTxRequest {
+    let mut request0 = IntraEnclaveRequest::ValidateTx {
+        request: Box::new(VerifyTxRequest {
             tx: withdrawtx,
             account: Some(account),
             info,
-        },
+        }),
         tx_inputs: None,
     };
     let r = check_tx(enclave.geteid(), request0, &mut txdb);
@@ -200,12 +200,12 @@ pub fn test_sealing() {
         }
     };
 
-    let mut request1 = IntraEnclaveRequest {
-        request: VerifyTxRequest {
+    let mut request1 = IntraEnclaveRequest::ValidateTx {
+        request: Box::new(VerifyTxRequest {
             tx: transfertx,
             account: None,
             info,
-        },
+        }),
         tx_inputs: Some(vec![sealedtx.clone()]),
     };
 
@@ -245,12 +245,12 @@ pub fn test_sealing() {
             txpayload: plain_txaux2.encode(),
         },
     };
-    let mut request2 = IntraEnclaveRequest {
-        request: VerifyTxRequest {
+    let mut request2 = IntraEnclaveRequest::ValidateTx {
+        request: Box::new(VerifyTxRequest {
             tx: transfertx2,
             account: None,
             info,
-        },
+        }),
         tx_inputs: Some(vec![sealedtx]),
     };
 

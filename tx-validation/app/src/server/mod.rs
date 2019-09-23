@@ -1,9 +1,9 @@
-use crate::enclave_u::{check_initchain, check_tx, get_token_arr, store_token};
+use crate::enclave_u::{check_initchain, check_tx, end_block, get_token_arr, store_token};
 use chain_core::state::account::DepositBondTx;
 use chain_core::tx::data::TxId;
 use chain_core::tx::TxAux;
 use enclave_protocol::IntraEnclaveRequest;
-use enclave_protocol::{EnclaveRequest, EnclaveResponse, FLAGS};
+use enclave_protocol::{is_basic_valid_tx_request, EnclaveRequest, EnclaveResponse, FLAGS};
 use log::{debug, info};
 use parity_scale_codec::{Decode, Encode};
 use sgx_urts::SgxEnclave;
@@ -93,6 +93,10 @@ impl TxValidationServer {
                             }
                         }
                     }
+                    Ok(EnclaveRequest::EndBlock) => EnclaveResponse::EndBlock(end_block(
+                        self.enclave.geteid(),
+                        IntraEnclaveRequest::EndBlock,
+                    )),
                     Ok(EnclaveRequest::CommitBlock { app_hash }) => {
                         let _ = self.txdb.insert(b"last_apphash", &app_hash);
                         if let Ok(_) = self.txdb.flush() {
@@ -102,20 +106,17 @@ impl TxValidationServer {
                         }
                     }
                     Ok(EnclaveRequest::VerifyTx(req)) => {
+                        let chid = req.info.chain_hex_id;
                         let mtxins = self.lookup(&req.tx);
-                        let request = IntraEnclaveRequest {
-                            request: *req,
-                            tx_inputs: mtxins,
-                        };
-                        if request
-                            .is_basic_valid(request.request.info.chain_hex_id)
-                            .is_err()
-                        {
+                        if is_basic_valid_tx_request(&req, &mtxins, chid).is_err() {
                             EnclaveResponse::UnsupportedTxType
                         } else {
                             EnclaveResponse::VerifyTx(check_tx(
                                 self.enclave.geteid(),
-                                request,
+                                IntraEnclaveRequest::ValidateTx {
+                                    request: req,
+                                    tx_inputs: mtxins,
+                                },
                                 &mut self.txdb,
                             ))
                         }

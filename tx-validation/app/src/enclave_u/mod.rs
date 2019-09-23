@@ -76,6 +76,35 @@ pub fn check_initchain(
     }
 }
 
+pub fn end_block(
+    eid: sgx_enclave_id_t,
+    request: IntraEnclaveRequest,
+) -> Result<Box<[u8; 256]>, ()> {
+    let request_buf: Vec<u8> = request.encode();
+    let mut response_buf: Vec<u8> = vec![0u8; 260];
+    let mut retval: sgx_status_t = sgx_status_t::SGX_SUCCESS;
+    let response_slice = &mut response_buf[..];
+    let result = unsafe {
+        ecall_check_tx(
+            eid,
+            &mut retval,
+            request_buf.as_ptr(),
+            request_buf.len(),
+            response_slice.as_mut_ptr(),
+            response_buf.len() as u32,
+        )
+    };
+    if retval == sgx_status_t::SGX_SUCCESS && result == retval {
+        let response = IntraEnclaveResponse::decode(&mut response_buf.as_slice());
+        match response {
+            Ok(Ok(IntraEnclaveResponseOk::EndBlock(filter))) => Ok(filter),
+            _ => Err(()),
+        }
+    } else {
+        Err(())
+    }
+}
+
 pub fn check_tx(
     eid: sgx_enclave_id_t,
     request: IntraEnclaveRequest,
@@ -98,25 +127,31 @@ pub fn check_tx(
     };
     if retval == sgx_status_t::SGX_SUCCESS && result == retval {
         let response = IntraEnclaveResponse::decode(&mut response_buf.as_slice());
-        match response {
-            Ok(Ok(IntraEnclaveResponseOk::TxWithOutputs {
-                paid_fee,
-                sealed_tx,
-            })) => {
+        match (request, response) {
+            (
+                IntraEnclaveRequest::ValidateTx { request, .. },
+                Ok(Ok(IntraEnclaveResponseOk::TxWithOutputs {
+                    paid_fee,
+                    sealed_tx,
+                })),
+            ) => {
                 let _ = txdb
-                    .insert(&request.request.tx.tx_id(), sealed_tx)
+                    .insert(&request.tx.tx_id(), sealed_tx)
                     .map_err(|_| Error::IoError)?;
-                if let Some(mut account) = request.request.account {
+                if let Some(mut account) = request.account {
                     account.withdraw();
                     Ok((paid_fee, Some(account)))
                 } else {
                     Ok((paid_fee, None))
                 }
             }
-            Ok(Ok(IntraEnclaveResponseOk::DepositStakeTx { input_coins })) => {
+            (
+                IntraEnclaveRequest::ValidateTx { request, .. },
+                Ok(Ok(IntraEnclaveResponseOk::DepositStakeTx { input_coins })),
+            ) => {
                 let deposit_amount =
-                    (input_coins - request.request.info.min_fee_computed.to_coin()).expect("init");
-                let account = match (request.request.account, request.request.tx) {
+                    (input_coins - request.info.min_fee_computed.to_coin()).expect("init");
+                let account = match (request.account, request.tx) {
                     (Some(mut a), _) => {
                         a.deposit(deposit_amount);
                         Some(a)
@@ -132,17 +167,17 @@ pub fn check_tx(
                         },
                     ) => Some(StakedState::new_init(
                         deposit_amount,
-                        request.request.info.previous_block_time,
+                        request.info.previous_block_time,
                         to_staked_account,
                         true,
                     )),
                     (_, _) => unreachable!("one shouldn't call this with other variants"),
                 };
-                let fee = request.request.info.min_fee_computed;
+                let fee = request.info.min_fee_computed;
                 Ok((fee, account))
             }
-            Ok(Err(e)) => Err(e),
-            _ => Err(Error::EnclaveRejected),
+            (_, Ok(Err(e))) => Err(e),
+            (_, _) => Err(Error::EnclaveRejected),
         }
     } else {
         Err(Error::EnclaveRejected)

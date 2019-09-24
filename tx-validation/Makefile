@@ -29,9 +29,6 @@
 #
 # Modifications Copyright 2019 Foris Limited (licensed under the Apache License, Version 2.0)
 
-######## Update SGX SDK ########
-include ../UpdateRustSGXSDK.mk
-
 ######## SGX SDK Settings ########
 
 SGX_SDK ?= /opt/intel/sgxsdk

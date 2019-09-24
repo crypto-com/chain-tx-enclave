@@ -1,4 +1,4 @@
-use crate::enclave_u::{check_initchain, check_tx};
+use crate::enclave_u::{check_initchain, check_tx, end_block};
 use crate::enclave_u::{get_token, store_token};
 use chain_core::common::MerkleTree;
 use chain_core::init::address::RedeemAddress;
@@ -96,6 +96,18 @@ pub fn test_sealing() {
     };
     assert!(check_initchain(enclave.geteid(), TEST_NETWORK_ID, None).is_ok());
 
+    let end_b = end_block(enclave.geteid(), IntraEnclaveRequest::EndBlock);
+    match end_b {
+        Ok(b) => {
+            debug!("request filter in the beginning");
+            assert!(b.iter().all(|x| *x == 0u8), "empty filter");
+        }
+        _ => {
+            cleanup(&mut db);
+            assert!(false, "filter not returned");
+        }
+    };
+
     let secp = Secp256k1::new();
     let secret_key = SecretKey::from_slice(&[0xcd; 32]).expect("32 bytes, within curve order");
     let public_key = PublicKey::from_secret_key(&secp, &secret_key);
@@ -141,12 +153,12 @@ pub fn test_sealing() {
             assert!(false, "new tx already in db");
         }
     };
-    let mut request0 = IntraEnclaveRequest {
-        request: VerifyTxRequest {
+    let mut request0 = IntraEnclaveRequest::ValidateTx {
+        request: Box::new(VerifyTxRequest {
             tx: withdrawtx,
             account: Some(account),
             info,
-        },
+        }),
         tx_inputs: None,
     };
     let r = check_tx(enclave.geteid(), request0, &mut txdb);
@@ -161,6 +173,18 @@ pub fn test_sealing() {
             cleanup(&mut db);
             assert!(false, "new tx not in db");
             vec![]
+        }
+    };
+
+    let end_b = end_block(enclave.geteid(), IntraEnclaveRequest::EndBlock);
+    match end_b {
+        Ok(b) => {
+            debug!("request filter after one tx");
+            assert!(b.iter().any(|x| *x != 0u8), "non-empty filter");
+        }
+        _ => {
+            cleanup(&mut db);
+            assert!(false, "filter not returned");
         }
     };
 
@@ -200,12 +224,12 @@ pub fn test_sealing() {
         }
     };
 
-    let mut request1 = IntraEnclaveRequest {
-        request: VerifyTxRequest {
+    let mut request1 = IntraEnclaveRequest::ValidateTx {
+        request: Box::new(VerifyTxRequest {
             tx: transfertx,
             account: None,
             info,
-        },
+        }),
         tx_inputs: Some(vec![sealedtx.clone()]),
     };
 
@@ -245,12 +269,12 @@ pub fn test_sealing() {
             txpayload: plain_txaux2.encode(),
         },
     };
-    let mut request2 = IntraEnclaveRequest {
-        request: VerifyTxRequest {
+    let mut request2 = IntraEnclaveRequest::ValidateTx {
+        request: Box::new(VerifyTxRequest {
             tx: transfertx2,
             account: None,
             info,
-        },
+        }),
         tx_inputs: Some(vec![sealedtx]),
     };
 

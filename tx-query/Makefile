@@ -27,7 +27,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 #
-# Modifications Copyright 2019 Foris Limited (licensed under the Apache License, Version 2.0)
+# Modifications Copyright 2019 Crypto.com (licensed under the Apache License, Version 2.0)
 
 ######## Update SGX SDK ########
 include ../UpdateRustSGXSDK.mk
